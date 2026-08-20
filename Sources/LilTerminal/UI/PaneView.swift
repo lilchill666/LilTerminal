@@ -197,12 +197,30 @@ private struct TerminalPane: NSViewRepresentable {
         // paint over the blur and defeat terminal transparency.
         container.layer?.backgroundColor = NSColor.clear.cgColor
 
+        // SwiftUI reuses this container when the pane switches to another
+        // session, so the previous session's view has to be evicted. Left in
+        // place it stayed stacked underneath, which showed the old tab's
+        // output under the new one and — because `layout()` only sizes the
+        // first subview — left the visible terminal frozen at its old size.
+        if ProcessInfo.processInfo.environment["LILTERM_DEBUG"] != nil {
+            FileHandle.standardError.write("PANE update sess=\(session.persistentID.prefix(6)) view=\(UInt(bitPattern: ObjectIdentifier(terminal).hashValue) % 100000) container=\(UInt(bitPattern: ObjectIdentifier(container).hashValue) % 100000) subviews=\(container.subviews.count) focused=\(isFocused)\n".data(using: .utf8)!)
+        }
+        for stale in container.subviews where stale !== terminal {
+            stale.removeFromSuperview()
+        }
+
         if terminal.superview !== container {
             terminal.removeFromSuperview()
             // Manual layout rather than constraints, so a changed inset simply
             // relayouts instead of needing constraints torn down and rebuilt.
             terminal.translatesAutoresizingMaskIntoConstraints = true
             container.addSubview(terminal)
+            // AppKit does not mark a view as needing layout just because it
+            // gained a subview, so without this the newly attached terminal
+            // kept a zero frame: it drew nothing, and with `bounds` at zero
+            // `gridSize()` fell back to 80x24 and never reflowed again.
+            terminal.frame = container.bounds
+            container.needsLayout = true
         }
 
         container.onDropPaths = { [weak session = session] paths in
@@ -282,14 +300,22 @@ private struct TerminalPane: NSViewRepresentable {
             return urls.map(\.path)
         }
 
+        /// Keeps a reparented terminal from sitting at a zero frame until some
+        /// unrelated event happens to trigger layout.
+        override func didAddSubview(_ subview: NSView) {
+            super.didAddSubview(subview)
+            needsLayout = true
+        }
+
         override func layout() {
             super.layout()
-            guard let terminal = subviews.first else { return }
-            // The trailing edge keeps a little less room: the overlay scroller
-            // floats there and would otherwise sit oddly far from the edge.
+            // Every subview, not just the first: a container that briefly
+            // holds two terminals must not leave one of them unsized.
             // The terminal fills the container; its own `padding` handles the
             // gap between text and edge, so insetting here would double it.
-            terminal.frame = bounds
+            for terminal in subviews {
+                terminal.frame = bounds
+            }
         }
     }
 }

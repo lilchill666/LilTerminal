@@ -321,6 +321,16 @@ designed to outlive the app.
 
 ### Three bugs this shook out
 
+**Adding a subview does not mark a view as needing layout.** A pane container
+is reused when SwiftUI switches it to another session, so the new terminal has
+to be given a frame at the moment it is attached — AppKit will not call
+`layout()` just because `addSubview` happened. Without it the newly attached
+terminal sat at a zero frame: it drew nothing, and because `gridSize()` falls
+back to 80x24 when `bounds` is degenerate, it never reflowed afterwards either.
+The container must also evict the outgoing terminal; left in place it stayed
+stacked underneath, so a new tab showed the previous tab's output through it.
+One bug, three symptoms: duplicated content, dead resizing, wrong metrics.
+
 **Liquid Glass does not clip what it is applied to.** `glassEffect(_:in:)`
 draws the material in the shape you give it and nothing more — unlike the solid
 and frosted branches, which follow it with `.clipShape`. The Liquid Glass branch

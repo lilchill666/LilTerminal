@@ -81,6 +81,7 @@ final class GhosttyTerminalView: NSView {
 
         pty.onOutput = { [weak self] bytes in
             guard let self else { return }
+            self.dbg("feed \(bytes.count) bytes")
             self.core.feed(bytes)
             self.scheduleRefresh()
             DispatchQueue.main.async { self.onOutput?() }
@@ -118,6 +119,11 @@ final class GhosttyTerminalView: NSView {
 
     /// Leaves the shell running; used when quitting with persistence on.
     func detach() { pty.detach() }
+
+    func dbg(_ m: String) {
+        guard Self.debug else { return }
+        FileHandle.standardError.write("VIEW \(UInt(bitPattern: ObjectIdentifier(self).hashValue) % 100000) \(m)\n".data(using: .utf8)!)
+    }
 
     func send(_ bytes: [UInt8]) {
         core.scrollToBottom()
@@ -254,6 +260,7 @@ final class GhosttyTerminalView: NSView {
     // MARK: - Drawing
 
     override func draw(_ dirtyRect: NSRect) {
+        dbg("draw rows=\(frameData.rows.count) cursor=\(String(describing: frameData.cursor)) bounds=\(bounds.size)")
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
         // Erase first. Filling with a translucent colour composites over the
