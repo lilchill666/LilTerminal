@@ -1,0 +1,4 @@
+ghostty-org/ghostty @ 50d3ac8ed6ad1cbca498f7a4388ab14054a5c3e1
+built with zig 0.16.0 via Tools/build-ghostty-vt.sh
+libghostty-vt only (the supported external embedding API; the renderer-bearing
+libghostty-internal API is explicitly not for external use).

@@ -1,0 +1,10 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# make.sh output
+build/
+dist/
+
+# macOS
+.DS_Store
