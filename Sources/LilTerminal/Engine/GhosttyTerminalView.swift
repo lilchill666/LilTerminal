@@ -86,6 +86,10 @@ final class GhosttyTerminalView: NSView {
         layer?.isOpaque = false
         measureCell()
 
+        // The engine answers queries by writing back to the shell. This is the
+        // wire between the two; without it the callback has nowhere to go.
+        core.onWritePty = { [weak self] bytes in self?.pty.write(bytes) }
+
         pty.onOutput = { [weak self] bytes in
             guard let self else { return }
             self.core.feed(bytes)

@@ -86,6 +86,8 @@ final class GhosttyCore {
               ghostty_render_state_row_iterator_new(nil, &rowIterator) == GHOSTTY_SUCCESS,
               ghostty_render_state_row_cells_new(nil, &cellsHandle) == GHOSTTY_SUCCESS
         else { return nil }
+
+        installQueryReplies()
     }
 
     deinit {
@@ -102,6 +104,57 @@ final class GhosttyCore {
         self.columns = columns
         self.rows = rows
         _ = ghostty_terminal_resize(terminal, columns, rows, cellWidth, cellHeight)
+    }
+
+    /// Where the engine's replies to terminal queries go: straight back to the
+    /// shell, exactly as if the user had typed them.
+    var onWritePty: (([UInt8]) -> Void)?
+
+    /// Lets the engine answer the questions programs ask it.
+    ///
+    /// libghostty-vt ignores every query by default — "sequences that require
+    /// output are silently ignored" until a write_pty callback exists. Without
+    /// one the terminal is mute: zle asks where the cursor is when a line wraps
+    /// (CSI 6n) and hears nothing, so it redraws from a position it guessed,
+    /// which is why holding a key through a wrap wiped the line. Full-screen
+    /// programs ask what the terminal *is* (CSI c) and wait for an answer that
+    /// never came.
+    private func installQueryReplies() {
+        guard let terminal else { return }
+
+        _ = ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_USERDATA,
+                                 Unmanaged.passUnretained(self).toOpaque())
+
+        let writePty: GhosttyTerminalWritePtyFn = { _, userdata, data, length in
+            guard let userdata, let data, length > 0 else { return }
+            let core = Unmanaged<GhosttyCore>.fromOpaque(userdata).takeUnretainedValue()
+            core.onWritePty?(Array(UnsafeBufferPointer(start: data, count: length)))
+        }
+        _ = ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_WRITE_PTY,
+                                 unsafeBitCast(writePty, to: UnsafeRawPointer.self))
+
+        // DA1: a VT220 with 132 columns, printer and colour, which is what
+        // every modern terminal claims and what programs expect to hear.
+        let attributes: GhosttyTerminalDeviceAttributesFn = { _, _, out in
+            guard let out else { return false }
+            out.pointee.primary.conformance_level = 62
+            out.pointee.primary.num_features = 4
+            withUnsafeMutablePointer(to: &out.pointee.primary.features) { pointer in
+                pointer.withMemoryRebound(to: UInt16.self, capacity: 64) { features in
+                    features[0] = 1    // 132 columns
+                    features[1] = 2    // printer port
+                    features[2] = 6    // selective erase
+                    features[3] = 22   // colour
+                }
+            }
+            out.pointee.secondary.device_type = 1
+            out.pointee.secondary.firmware_version = 10
+            out.pointee.secondary.rom_cartridge = 0
+            out.pointee.tertiary.unit_id = 0
+            return true
+        }
+        _ = ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_DEVICE_ATTRIBUTES,
+                                 unsafeBitCast(attributes, to: UnsafeRawPointer.self))
     }
 
     /// Installs a theme's colours in the engine.

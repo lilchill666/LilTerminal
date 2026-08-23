@@ -321,6 +321,17 @@ designed to outlive the app.
 
 ### Three bugs this shook out
 
+**The terminal was mute.** libghostty-vt ignores every sequence that requires a
+reply until a `WRITE_PTY` callback is installed — the header says so plainly:
+"sequences that require output (queries, device status reports) are silently
+ignored". Nothing was installed, so the terminal never answered a single
+question asked of it. `zle` asks where the cursor is when a line wraps (CSI 6n);
+hearing nothing, it redrew from a guessed position, which is why holding a key
+through a wrap wiped the line and refilled it. Full-screen programs ask what the
+terminal *is* (CSI c) and waited for an answer that never came. Installing
+`WRITE_PTY` and a device-attributes response fixes both. A cursor query now
+returns `^[[2;1R` where it previously returned nothing at all.
+
 **Every theme's ANSI palette was decoration.** The engine answered colour
 queries from Ghostty's own defaults, so the sixteen colours in each theme were
 never installed and a red in one theme was the same red in all of them. It only
