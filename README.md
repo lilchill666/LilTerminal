@@ -321,6 +321,21 @@ designed to outlive the app.
 
 ### Three bugs this shook out
 
+**Every theme's ANSI palette was decoration.** The engine answered colour
+queries from Ghostty's own defaults, so the sixteen colours in each theme were
+never installed and a red in one theme was the same red in all of them. It only
+became obvious on a monochrome theme, where `ls` still came out in six colours.
+`GHOSTTY_TERMINAL_OPT_COLOR_PALETTE` takes indices 0-15; 16-255 are generated
+from them so the 256-colour cube agrees with the palette instead of being a
+fixed rainbow bolted onto it. The default *background* is deliberately left
+unset — cells using it must keep reporting "no colour" so the renderer can leave
+them unpainted, which is what terminal transparency depends on here.
+
+**On a light theme the bright ANSI row has to get darker.** The convention that
+index 15 is "bright white" assumes a dark screen. A program printing bright
+white is printing body text, and #F2EEE2 on beige is 1.3:1 — invisible. Light
+themes here invert that half of the ramp.
+
 **libghostty-vt requires exclusive access, and that means every call.** The
 lock was held around `feed` and `snapshot` but two paths reached the terminal
 without it: `scrollToBottom`, which runs on every keystroke, and a

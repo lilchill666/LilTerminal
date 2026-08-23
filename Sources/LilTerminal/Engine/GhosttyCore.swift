@@ -104,6 +104,45 @@ final class GhosttyCore {
         _ = ghostty_terminal_resize(terminal, columns, rows, cellWidth, cellHeight)
     }
 
+    /// Installs a theme's colours in the engine.
+    ///
+    /// Without this the ANSI palette in every theme was decoration: the engine
+    /// answered colour queries from Ghostty's own defaults, so a red in one
+    /// theme was the same red in all of them — and a monochrome theme still
+    /// painted `ls` output in six colours.
+    ///
+    /// Indices 0-15 come from the theme; 16-255 are generated from them, which
+    /// is what makes the 256-colour cube agree with the palette instead of
+    /// being a fixed rainbow bolted onto it. The default *background* is
+    /// deliberately not set: cells using it must keep reporting "no colour" so
+    /// the renderer can leave them unpainted, which is what terminal
+    /// transparency depends on here.
+    func applyPalette(ansi: [EngineColor], foreground: EngineColor, cursor: EngineColor) {
+        guard ansi.count == 16 else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        guard let terminal else { return }
+
+        var base = [GhosttyColorRgb](repeating: GhosttyColorRgb(), count: 256)
+        ghostty_color_palette_default(&base)
+        for (index, colour) in ansi.enumerated() {
+            base[index] = GhosttyColorRgb(r: colour.r, g: colour.g, b: colour.b)
+        }
+
+        var generated = [GhosttyColorRgb](repeating: GhosttyColorRgb(), count: 256)
+        var fg = GhosttyColorRgb(r: foreground.r, g: foreground.g, b: foreground.b)
+        var bg = GhosttyColorRgb(r: ansi[0].r, g: ansi[0].g, b: ansi[0].b)
+        ghostty_color_palette_generate(&base, nil, &bg, &fg, false, &generated)
+        // Indices 0-15 are always preserved by generate(), but be explicit:
+        // these are the ones a theme is actually judged on.
+        for index in 0..<16 { generated[index] = base[index] }
+
+        _ = ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_COLOR_PALETTE, &generated)
+        _ = ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND, &fg)
+        var cur = GhosttyColorRgb(r: cursor.r, g: cursor.g, b: cursor.b)
+        _ = ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_COLOR_CURSOR, &cur)
+    }
+
     /// Feeds bytes read from the pty into the parser.
     func feed(_ bytes: UnsafeRawBufferPointer) {
         guard let terminal, let base = bytes.baseAddress else { return }

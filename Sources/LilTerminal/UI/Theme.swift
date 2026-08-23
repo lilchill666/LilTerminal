@@ -32,6 +32,8 @@ enum Theme {
         // makes the terminal translucent — no engine cooperation required.
         view.backgroundOpacity = max(0.05, min(1, opacity))
         view.showsScanlines = theme.scanlines
+        view.showsGlow = theme.glow
+        view.applyPalette(theme)
         view.padding = inset
         view.font = monoFont(size: fontSize, name: fontName)
         view.needsDisplay = true

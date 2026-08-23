@@ -27,10 +27,12 @@ struct AppTheme: Codable, Identifiable, Hashable {
     var disablesEffects: Bool = false
     /// Draws CRT scanlines over the terminal.
     var scanlines: Bool = false
+    /// Blooms the glyphs into the background, the way phosphor does.
+    var glow: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case id, name, isDark, background, foreground, cursor, selection, accent, ansi
-        case disablesEffects, scanlines
+        case disablesEffects, scanlines, glow
         // isBuiltIn is deliberately not encoded: an exported built-in becomes
         // an ordinary editable theme on the machine that imports it.
     }
@@ -38,7 +40,7 @@ struct AppTheme: Codable, Identifiable, Hashable {
     init(id: UUID = UUID(), name: String, isDark: Bool = true, isBuiltIn: Bool = false,
          background: String, foreground: String, cursor: String, selection: String,
          accent: String, ansi: [String],
-         disablesEffects: Bool = false, scanlines: Bool = false) {
+         disablesEffects: Bool = false, scanlines: Bool = false, glow: Bool = false) {
         self.id = id
         self.name = name
         self.isDark = isDark
@@ -51,6 +53,7 @@ struct AppTheme: Codable, Identifiable, Hashable {
         self.ansi = ansi
         self.disablesEffects = disablesEffects
         self.scanlines = scanlines
+        self.glow = glow
     }
 
     /// Written by hand so that a theme saved before a field existed still
@@ -69,6 +72,7 @@ struct AppTheme: Codable, Identifiable, Hashable {
         ansi = try container.decode([String].self, forKey: .ansi)
         disablesEffects = try container.decodeIfPresent(Bool.self, forKey: .disablesEffects) ?? false
         scanlines = try container.decodeIfPresent(Bool.self, forKey: .scanlines) ?? false
+        glow = try container.decodeIfPresent(Bool.self, forKey: .glow) ?? false
         isBuiltIn = false
     }
 
@@ -162,20 +166,95 @@ extension AppTheme {
                "#57575C", "#8F2420", "#245A2A", "#664600",
                "#1F55B0", "#5F2F8C", "#08595C", "#4A4A50"])
 
-    /// A P1 phosphor CRT: near-black glass, green everything. The ANSI ramp is
-    /// deliberately not colourful — a monochrome monitor had one phosphor, so
-    /// "red" and "blue" were only ever brighter or dimmer green. Keeping that
-    /// is what makes it read as the real thing rather than a green tint.
+    /// A P1 phosphor monitor.
+    ///
+    /// P1 is zinc silicate and it is not the pure green people reach for — it
+    /// sits noticeably yellow, around 525 nm. The glass is not black either: an
+    /// unlit CRT is dark warm grey, and the faint green cast in the background
+    /// here is the phosphor idling, not a tint. The ramp is monochrome because
+    /// the tube had one phosphor — "red" and "blue" could only ever be brighter
+    /// or dimmer green — and the whole thing glows, because that is most of the
+    /// difference between a real green screen and green text on black.
     static let phosphor = AppTheme(
         id: UUID(uuidString: "11111111-0000-4000-A000-000000000006")!,
         name: "Phosphor", isDark: true, isBuiltIn: true,
-        background: "#020A02", foreground: "#33FF66",
-        cursor: "#7CFFA8", selection: "#0E4D22", accent: "#33FF66",
-        ansi: ["#0A1F0E", "#1FCC4E", "#33FF66", "#26E058",
-               "#1AB847", "#2BEF5E", "#45FF77", "#8CFFB4",
-               "#14401F", "#5CFF88", "#7CFFA8", "#6BFF99",
-               "#4DFF80", "#8CFFB4", "#A3FFC4", "#D6FFE4"],
-        disablesEffects: true, scanlines: true)
+        background: "#0B0F0A", foreground: "#4AFF52",
+        cursor: "#B6FFB0", selection: "#1C4A1E", accent: "#7CFF6E",
+        ansi: ["#111A10", "#2FA835", "#4AFF52", "#3FE045",
+               "#289A2C", "#57FF5E", "#6BFF72", "#9BFF9E",
+               "#1A3318", "#7CFF80", "#98FF9B", "#8AFF8D",
+               "#66FF6C", "#A8FFAA", "#BEFFC0", "#E4FFE5"],
+        disablesEffects: true, scanlines: true, glow: true)
+
+    /// A RobCo terminal: the wasteland's idea of a computer.
+    ///
+    /// Deliberately not the same green as Phosphor. Where a P1 tube runs
+    /// yellow, this one runs cold and toxic — a cyan-leaning green pushed far
+    /// past anything a real monitor produced, over a green-black that is closer
+    /// to bottle glass than to grey. Heavy bloom, because in that world every
+    /// screen is overdriven.
+    static let falloutTerminal = AppTheme(
+        id: UUID(uuidString: "11111111-0000-4000-A000-000000000008")!,
+        name: "RobCo", isDark: true, isBuiltIn: true,
+        background: "#04140B", foreground: "#1AFF8C",
+        cursor: "#8CFFC6", selection: "#0C4A2C", accent: "#22FFA0",
+        ansi: ["#08210F", "#12B865", "#1AFF8C", "#16DC79",
+               "#0FA35C", "#25FF97", "#3BFFA8", "#7FFFC8",
+               "#0C3318", "#4BFFA6", "#6BFFBA", "#5AFFAF",
+               "#33FF9E", "#8CFFCC", "#A6FFD8", "#DBFFEC"],
+        disablesEffects: true, scanlines: true, glow: true)
+
+    /// Miami, about 1985: a hot night, neon on wet tarmac.
+    ///
+    /// The one retro theme that keeps the effects on — chrome and glass are the
+    /// point here, and neon over a blurred background is exactly the look.
+    static let miami = AppTheme(
+        id: UUID(uuidString: "11111111-0000-4000-A000-000000000009")!,
+        name: "Miami", isDark: true, isBuiltIn: true,
+        background: "#1B0B2E", foreground: "#F2E3FF",
+        cursor: "#00E5FF", selection: "#57277A", accent: "#FF3D9A",
+        ansi: ["#2A1245", "#FF3D9A", "#3DFFB8", "#FFB03D",
+               "#5B8CFF", "#C46BFF", "#00E5FF", "#D9C6EE",
+               "#4A2470", "#FF74B8", "#75FFD1", "#FFC978",
+               "#8FB2FF", "#DA9DFF", "#6BF0FF", "#FFFFFF"])
+
+    /// Coals in a stove: warm dark, everything lit from one source.
+    static let ember = AppTheme(
+        id: UUID(uuidString: "11111111-0000-4000-A000-00000000000A")!,
+        name: "Ember", isDark: true, isBuiltIn: true,
+        background: "#17110E", foreground: "#EDDCCB",
+        cursor: "#FF9245", selection: "#4A3324", accent: "#FF9245",
+        ansi: ["#241A15", "#E05A3C", "#9CA84E", "#E8A33D",
+               "#C97B4A", "#C4707E", "#5FA394", "#C8B6A3",
+               "#3A2A21", "#FF7A5C", "#BFCC6A", "#FFC463",
+               "#E39A6B", "#E38FA0", "#7FC4B4", "#F7EADC"])
+
+    /// Drafting paper: white ink on blue, and nothing else.
+    ///
+    /// Flat by design — a blueprint is a matte print, so glass and blur would be
+    /// the one thing that breaks it. No glow: this is ink, not light.
+    static let blueprint = AppTheme(
+        id: UUID(uuidString: "11111111-0000-4000-A000-00000000000B")!,
+        name: "Blueprint", isDark: true, isBuiltIn: true,
+        background: "#0E2A4A", foreground: "#DCE9F7",
+        cursor: "#FFFFFF", selection: "#1E4E7E", accent: "#7FC4FF",
+        ansi: ["#16375C", "#FF9E9E", "#A8E6C0", "#FFE1A3",
+               "#7FC4FF", "#C9B6FF", "#9FE8F0", "#C3D6E8",
+               "#245380", "#FFBDBD", "#C6F2D8", "#FFEFC8",
+               "#A9D8FF", "#DDD0FF", "#C4F2F7", "#FFFFFF"],
+        disablesEffects: true)
+
+    /// Late blossom under a grey sky: a light theme that is not white.
+    static let sakura = AppTheme(
+        id: UUID(uuidString: "11111111-0000-4000-A000-00000000000C")!,
+        name: "Sakura", isDark: false, isBuiltIn: true,
+        background: "#FBF2F4", foreground: "#4A3540",
+        cursor: "#C2477A", selection: "#F2D3DE", accent: "#C2477A",
+        // Same rule as Beige Box: the bright row darkens on a light background.
+        ansi: ["#4A3540", "#B23A6E", "#4E7A52", "#96651F",
+               "#42639C", "#7A4C98", "#357878", "#7A6A72",
+               "#5B4450", "#C24A80", "#3F6B44", "#7E5518",
+               "#37548A", "#684087", "#2C6666", "#2E2028"])
 
     /// The beige box: a plastic-cased machine under office light. Warm grey-white
     /// screen, ink-dark text, and a palette mixed from printer ribbon rather than
@@ -185,16 +264,23 @@ extension AppTheme {
         name: "Beige Box", isDark: false, isBuiltIn: true,
         background: "#D9D4C4", foreground: "#2B2822",
         cursor: "#2B2822", selection: "#B6AF98", accent: "#8A6F3C",
-        ansi: ["#2B2822", "#9C3B2E", "#4A6B3A", "#8A6F3C",
-               "#3F5C7A", "#6E4A72", "#3F6E6B", "#7A7462",
-               "#5A554A", "#B84E3D", "#5E8449", "#A8873F",
-               "#4F7396", "#8A5E8F", "#4F8985", "#F2EEE2"],
+        // On a light screen the "bright" row has to go darker, not lighter: a
+        // program printing bright white is printing body text, and #F2EEE2 on
+        // beige is 1.3:1 — invisible.
+        ansi: ["#2B2822", "#8E3327", "#3C5A2E", "#7A6032",
+               "#35506B", "#5F3F63", "#35605D", "#6B6558",
+               "#4A463C", "#A34433", "#476B38", "#8A6E30",
+               "#3F5F85", "#734D77", "#3F736F", "#1F1C17"],
         disablesEffects: true, scanlines: false)
 
     /// Built-in IDs are fixed constants, not fresh UUIDs. A generated id would
     /// differ on every launch, so the saved "active theme" would never match
     /// and the app would silently reset to the default each time it started.
-    static let builtIns: [AppTheme] = [lilDark, tokyoNight, nord, solarizedDark, paper, phosphor, beigeBox]
+    static let builtIns: [AppTheme] = [
+        lilDark, tokyoNight, nord, solarizedDark, paper,
+        phosphor, falloutTerminal, beigeBox, blueprint,
+        miami, ember, sakura,
+    ]
 }
 
 /// Owns the theme list, the active selection, and import/export.

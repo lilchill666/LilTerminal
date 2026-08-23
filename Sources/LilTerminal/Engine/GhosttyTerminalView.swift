@@ -27,6 +27,8 @@ final class GhosttyTerminalView: NSView {
     var backgroundOpacity: CGFloat = 1 { didSet { needsDisplay = true } }
     /// CRT raster overlay, set from the active theme.
     var showsScanlines = false { didSet { if showsScanlines != oldValue { needsDisplay = true } } }
+    /// CRT bloom around the glyphs, set from the active theme.
+    var showsGlow = false { didSet { if showsGlow != oldValue { needsDisplay = true } } }
     var padding: CGFloat = 12 { didSet { reflow() } }
 
     // MARK: Callbacks
@@ -403,6 +405,13 @@ final class GhosttyTerminalView: NSView {
         }
 
         context.saveGState()
+        // Phosphor bleeds into the glass around it, which is most of why a real
+        // green screen looks nothing like green text on black. A shadow in the
+        // glyph's own colour with no offset is that bloom.
+        if showsGlow {
+            context.setShadow(offset: .zero, blur: 3.5,
+                              color: color.withAlphaComponent(0.85).cgColor)
+        }
         context.scaleBy(x: 1, y: -1)
         // Reset per run, not once per frame. CTLineDraw mutates the text
         // matrix, so a single fallback glyph (an emoji, say) silently
@@ -861,6 +870,22 @@ final class GhosttyTerminalView: NSView {
 
     /// True when the running program has asked for mouse events.
     var mouseTrackingActive: Bool { core.wantsMouseTracking }
+
+    /// Hands the theme's 16 ANSI colours to the engine.
+    func applyPalette(_ theme: AppTheme) {
+        let ansi = theme.ansi.compactMap(Self.engineColor)
+        guard let foreground = Self.engineColor(theme.foreground),
+              let cursor = Self.engineColor(theme.cursor), ansi.count == 16 else { return }
+        core.applyPalette(ansi: ansi, foreground: foreground, cursor: cursor)
+        needsDisplay = true
+    }
+
+    private static func engineColor(_ hex: String) -> EngineColor? {
+        guard let parsed = HexColor.parse(hex) else { return nil }
+        return EngineColor(r: UInt8(round(parsed.r * 255)),
+                           g: UInt8(round(parsed.g * 255)),
+                           b: UInt8(round(parsed.b * 255)))
+    }
 
     /// Syncs an encoder to this terminal's modes, under the engine lock.
     func syncEncoder(_ body: (GhosttyTerminal) -> Void) {

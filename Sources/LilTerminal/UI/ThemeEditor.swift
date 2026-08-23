@@ -184,6 +184,15 @@ struct ThemeEditor: View {
             .font(.caption)
             .disabled(selection.isBuiltIn)
 
+            Toggle("Phosphor glow", isOn: Binding(
+                get: { selection.glow },
+                set: { selection.glow = $0; commit() }
+            ))
+            .toggleStyle(.checkbox)
+            .font(.caption)
+            .disabled(selection.isBuiltIn)
+            .help("Blooms the text into the background the way a CRT does.")
+
             Text("A theme that disables effects keeps its own look intact — a period design falls apart behind frosted glass. Whatever blur and transparency you had is saved and restored when another theme takes over.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
