@@ -131,6 +131,13 @@ final class TerminalSession: ObservableObject, Identifiable {
 
     func send(text: String) { send(Array(text.utf8)) }
 
+    /// Text arriving as a block — a snippet, a history entry, a dropped path.
+    /// Bracketed so the program can tell it from someone typing very fast.
+    func send(paste text: String) {
+        noteInteraction()
+        terminalView.send(paste: text)
+    }
+
     func terminate() {
         guard isRunning else { return }
         terminalView.terminate()

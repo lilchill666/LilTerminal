@@ -321,6 +321,17 @@ designed to outlive the app.
 
 ### Three bugs this shook out
 
+**A paste has to be bracketed or it is just fast typing.** Nothing wrapped
+pasted text in `ESC[200~`/`ESC[201~`, so an application had no way to tell a
+paste from someone typing quickly and fell back to guessing from timing. One
+paste arrived as several bursts — the pty write loop drains about a kilobyte at
+a time and waits — and each burst was counted as its own paste, which is why a
+single paste turned into several "pasted text" entries. `ghostty_paste_encode`
+does the wrapping, converts newlines to carriage returns when the mode is off,
+and strips control bytes that could close the bracket early and inject a
+command. Everything that drops a block of text into the shell goes through it:
+the paste command, dropped files, history entries, palette insertions.
+
 **The terminal was mute.** libghostty-vt ignores every sequence that requires a
 reply until a `WRITE_PTY` callback is installed — the header says so plainly:
 "sequences that require output (queries, device status reports) are silently

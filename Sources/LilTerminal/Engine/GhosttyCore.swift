@@ -253,6 +253,52 @@ final class GhosttyCore {
                             wideTail: cursor.wide_tail)
     }
 
+    /// True while a program has bracketed paste mode on.
+    var wantsBracketedPaste: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let terminal else { return false }
+        // DEC private mode 2004. The header's macro is a C inline that Swift
+        // cannot import, but the packing is documented and frozen: bits 0-14
+        // are the mode number, bit 15 marks an ANSI (rather than DEC) mode.
+        let bracketedPaste = GhosttyMode(2004)
+        var config = GhosttyTerminalModeConfig(mode: bracketedPaste, value: false)
+        guard ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_MODE, &config) == GHOSTTY_SUCCESS
+        else { return false }
+        return config.value
+    }
+
+    /// Prepares text for the pty the way a paste is supposed to arrive.
+    ///
+    /// Bracketed paste is the whole reason a program can tell a paste from
+    /// typing. Without the wrapper an application sees only a fast run of
+    /// keystrokes and has to guess where the paste starts and stops — which is
+    /// why a single paste turned into several "pasted text" entries, and why
+    /// newlines inside it were treated as Enter.
+    ///
+    /// The engine owns the encoding: it also strips control bytes that could
+    /// close the bracket early and inject a command.
+    func encodePaste(_ text: String) -> [UInt8] {
+        let bracketed = wantsBracketedPaste
+        var data = Array(text.utf8).map { CChar(bitPattern: $0) }
+        guard !data.isEmpty else { return [] }
+
+        // Ask for the size first: the wrapper and any escaping make the result
+        // longer than the input, and the engine reports exactly how much.
+        var needed = 0
+        _ = ghostty_paste_encode(&data, data.count, bracketed, nil, 0, &needed)
+        guard needed > 0 else { return [] }
+
+        var out = [CChar](repeating: 0, count: needed)
+        var written = 0
+        // `data` is modified in place, so rebuild it for the real call.
+        var input = Array(text.utf8).map { CChar(bitPattern: $0) }
+        guard ghostty_paste_encode(&input, input.count, bracketed,
+                                   &out, out.count, &written) == GHOSTTY_SUCCESS
+        else { return [] }
+        return out.prefix(written).map { UInt8(bitPattern: $0) }
+    }
+
     /// True when a program has asked to receive mouse events.
     var wantsMouseTracking: Bool {
         lock.lock()

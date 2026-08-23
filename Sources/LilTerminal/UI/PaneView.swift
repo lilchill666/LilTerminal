@@ -224,7 +224,7 @@ private struct TerminalPane: NSViewRepresentable {
             guard let session, !paths.isEmpty else { return }
             // Typed, not executed: dropping a file should hand you the path to
             // use, never run something because a finger slipped.
-            session.send(text: paths.map(Self.shellQuote).joined(separator: " ") + " ")
+            session.send(paste: paths.map(Self.shellQuote).joined(separator: " ") + " ")
         }
 
         if container.inset != inset {

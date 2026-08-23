@@ -152,7 +152,7 @@ struct CommandPalette: View {
                 items.append(PaletteItem(
                     title: entry.command, subtitle: entry.directory,
                     icon: "clock.arrow.circlepath", group: "History") {
-                        workspace.focusedSession?.send(text: entry.command)
+                        workspace.focusedSession?.send(paste: entry.command)
                     })
             }
         }

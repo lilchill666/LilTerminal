@@ -139,6 +139,18 @@ final class GhosttyTerminalView: NSView {
 
     func send(text: String) { send(Array(text.utf8)) }
 
+    /// Delivers text as a *paste* rather than as typing.
+    ///
+    /// Everything that drops a block of text into the shell goes through here —
+    /// the paste command, a dropped file, a history entry, a snippet — because
+    /// they are all pastes as far as the program on the other end is concerned,
+    /// and it can only tell if the bracket is there.
+    func send(paste text: String) {
+        let bytes = core.encodePaste(text)
+        guard !bytes.isEmpty else { return }
+        send(bytes)
+    }
+
     // MARK: - Layout
 
     private func measureCell() {
@@ -962,6 +974,6 @@ final class GhosttyTerminalView: NSView {
     @objc func paste(_ sender: Any?) {
         guard let text = NSPasteboard.general.string(forType: .string) else { return }
         guard let approved = pasteFilter?(text) ?? text as String? else { return }
-        send(text: approved)
+        send(paste: approved)
     }
 }

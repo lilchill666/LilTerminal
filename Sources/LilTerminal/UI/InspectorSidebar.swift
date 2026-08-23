@@ -230,7 +230,7 @@ private struct HistoryRow: View {
             if hovering {
                 // Insert rather than run: re-running a command from history
                 // without looking at it is how people delete things twice.
-                Button { workspace.focusedSession?.send(text: entry.command) } label: {
+                Button { workspace.focusedSession?.send(paste: entry.command) } label: {
                     Image(systemName: "arrow.up.left.square")
                 }
                 .buttonStyle(.plain)
@@ -243,9 +243,9 @@ private struct HistoryRow: View {
         .background(hovering ? theme.hoverFill : .clear)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .onTapGesture(count: 2) { workspace.focusedSession?.send(text: entry.command) }
+        .onTapGesture(count: 2) { workspace.focusedSession?.send(paste: entry.command) }
         .contextMenu {
-            Button("Insert") { workspace.focusedSession?.send(text: entry.command) }
+            Button("Insert") { workspace.focusedSession?.send(paste: entry.command) }
             Button("Copy") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(entry.command, forType: .string)
