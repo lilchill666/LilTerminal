@@ -17,6 +17,16 @@ struct SessionMetrics: Equatable {
     var workingDirectory: String?
 
     static let zero = SessionMetrics()
+
+    /// What the sidebar actually shows. Raw CPU jitters constantly and would
+    /// make every comparison report a change; this compares what is drawn.
+    var displaySignature: Int {
+        var hasher = Hasher()
+        hasher.combine(Int(cpuPercent.rounded()))
+        hasher.combine(residentBytes / (1024 * 1024))
+        hasher.combine(processCount)
+        return hasher.finalize()
+    }
 }
 
 /// One process as libproc sees it.

@@ -221,6 +221,38 @@ struct SettingsView: View {
             .labelsHidden()
         }
 
+        SwiftUI.Section {
+            Toggle("Typing sounds", isOn: prefs.typingSounds)
+
+            Picker("Sound", selection: prefs.typingSoundSet) {
+                ForEach(TypingSoundSet.allCases) { Text($0.label).tag($0) }
+            }
+            .disabled(!current.typingSounds)
+
+            LabeledContent("Volume") {
+                slider(prefs.typingSoundVolume, 0...1, 0.05,
+                       "\(Int(current.typingSoundVolume * 100))%")
+            }
+            .disabled(!current.typingSounds)
+
+            Button("Try it") {
+                TypingSounds.shared.configure(enabled: true, set: current.typingSoundSet)
+                for index in 0..<5 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.11) {
+                        TypingSounds.shared.play(isReturn: index == 4,
+                                                 volume: current.typingSoundVolume)
+                    }
+                }
+            }
+            .disabled(!current.typingSounds)
+        } header: {
+            Text("Keyboard")
+        } footer: {
+            Text("Synthesised, not sampled — every press picks a different variant at a slightly different level, so a burst of typing does not turn into a loop. The audio engine only runs while this is on.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
         SwiftUI.Section("Motion") {
             Toggle("Animations", isOn: prefs.animationsEnabled)
             LabeledContent("Speed") {

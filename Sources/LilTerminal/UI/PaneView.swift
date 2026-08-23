@@ -202,9 +202,6 @@ private struct TerminalPane: NSViewRepresentable {
         // place it stayed stacked underneath, which showed the old tab's
         // output under the new one and — because `layout()` only sizes the
         // first subview — left the visible terminal frozen at its old size.
-        if ProcessInfo.processInfo.environment["LILTERM_DEBUG"] != nil {
-            FileHandle.standardError.write("PANE update sess=\(session.persistentID.prefix(6)) view=\(UInt(bitPattern: ObjectIdentifier(terminal).hashValue) % 100000) container=\(UInt(bitPattern: ObjectIdentifier(container).hashValue) % 100000) subviews=\(container.subviews.count) focused=\(isFocused)\n".data(using: .utf8)!)
-        }
         for stale in container.subviews where stale !== terminal {
             stale.removeFromSuperview()
         }

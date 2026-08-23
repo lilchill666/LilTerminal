@@ -243,11 +243,12 @@ struct WindowConfigurator: NSViewRepresentable {
         window.styleMask.insert(.fullSizeContentView)
         // Without this a divider is drawn across the top of our own bar.
         window.titlebarSeparatorStyle = .none
-        // The custom top bar covers the (now hidden) titlebar, which would
-        // otherwise be the only place to drag from. Views that handle their own
-        // mouse events — the terminal, sidebar rows — still take precedence,
-        // so text selection and tab dragging are unaffected.
-        window.isMovableByWindowBackground = true
+        // Background dragging is deliberately off. It sounds harmless — the
+        // hidden titlebar leaves nowhere else to grab — but AppKit hands the
+        // drag to any view that has not opted out, which swallowed every tab
+        // drag in the sidebar before it could start. `WindowDragArea` puts the
+        // drag back, in the one place it belongs.
+        window.isMovableByWindowBackground = false
         placeTrafficLights(in: window)
     }
 }
@@ -290,5 +291,29 @@ extension View {
                 shape.strokeBorder(theme.hairline.opacity(0.9), lineWidth: 0.5)
             }
             .shadow(color: .black.opacity(theme.isDark ? 0.34 : 0.14), radius: 12, x: 0, y: 4)
+    }
+}
+
+
+/// Makes whatever it is placed behind draggable as the window.
+///
+/// Sits in the top bar's background: SwiftUI's controls draw above it and take
+/// their own clicks first, so only the empty stretches of the bar drag.
+struct WindowDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { DragView() }
+    func updateNSView(_ view: NSView, context: Context) {}
+
+    private final class DragView: NSView {
+        override var mouseDownCanMoveWindow: Bool { true }
+
+        override func mouseDown(with event: NSEvent) {
+            // `performDrag` runs its own event loop and never returns until the
+            // drag ends, so the double-click check has to happen up front.
+            if event.clickCount == 2 {
+                window?.zoom(nil)
+                return
+            }
+            window?.performDrag(with: event)
+        }
     }
 }

@@ -66,6 +66,9 @@ final class Workspace: NSObject, ObservableObject {
         if old.backgroundImagePath != prefs.backgroundImagePath {
             reloadBackgroundImage()
         }
+        if old.typingSounds != prefs.typingSounds || old.typingSoundSet != prefs.typingSoundSet {
+            TypingSounds.shared.configure(enabled: prefs.typingSounds, set: prefs.typingSoundSet)
+        }
     }
 
     private func reloadBackgroundImage() {
@@ -150,6 +153,8 @@ final class Workspace: NSObject, ObservableObject {
         installInputMonitor()
         reloadBackgroundImage()
         Workspace.current = self
+        // Only spins the audio engine up if the feature is already on.
+        TypingSounds.shared.configure(enabled: prefs.typingSounds, set: prefs.typingSoundSet)
     }
 
     /// One monitor rather than a TerminalView subclass: `keyDown` is not open
@@ -169,6 +174,12 @@ final class Workspace: NSObject, ObservableObject {
             }
             return event
         }
+    }
+
+    /// Puts the keyboard back in the terminal after an inline editor closes.
+    func focusTerminal() {
+        guard let view = focusedSession?.terminalView else { return }
+        DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
     }
 
     func tab(containing sessionID: UUID) -> Tab? {
@@ -196,8 +207,17 @@ final class Workspace: NSObject, ObservableObject {
             }
         }
 
-        // Tab aggregates are computed, so nudge tab observers explicitly.
-        for tab in tabs { tab.objectWillChange.send() }
+        // Tab aggregates are computed, so nudge tab observers explicitly — but
+        // only when the aggregate actually moved at display granularity.
+        // Nudging unconditionally re-rendered every row once a second, which
+        // tore down any open context menu the moment the pointer reached it.
+        for tab in tabs {
+            let signature = tab.metrics.displaySignature
+            if tab.lastMetricsSignature != signature {
+                tab.lastMetricsSignature = signature
+                tab.objectWillChange.send()
+            }
+        }
         WindowConfigurator.enforceTrafficLights()
         ai.tick()
         if autoFileBackgroundJobs { autoFileIfNeeded() }

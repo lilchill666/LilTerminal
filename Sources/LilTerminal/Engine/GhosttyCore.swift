@@ -54,8 +54,20 @@ final class GhosttyCore {
     private(set) var columns: UInt16
     private(set) var rows: UInt16
 
-    /// Exposed so the key encoder can sync terminal modes from it.
-    var terminalHandle: GhosttyTerminal? { terminal }
+    /// Runs `body` with the terminal under the lock.
+    ///
+    /// The handle used to be exposed directly so the key and mouse encoders
+    /// could read terminal modes from it. They did that on the main thread
+    /// while the pty queue was inside the parser, and the resulting races
+    /// scrambled the grid — rows half-written, fragments of one line inside
+    /// another. Nothing may touch the terminal outside this.
+    @discardableResult
+    func withTerminal<T>(_ body: (GhosttyTerminal) -> T) -> T? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let terminal else { return nil }
+        return body(terminal)
+    }
 
     /// Guards the terminal instance.
     ///
@@ -118,6 +130,10 @@ final class GhosttyCore {
     /// Jumps back to the live edge, which is what any keypress should do.
     func scrollToBottom() {
         guard let terminal else { return }
+        // Every keystroke calls this. Unlocked, it reached into the terminal
+        // from the main thread while the pty queue was parsing output.
+        lock.lock()
+        defer { lock.unlock() }
         var behavior = GhosttyTerminalScrollViewport()
         behavior.tag = GHOSTTY_SCROLL_VIEWPORT_DELTA
         // A delta larger than any plausible scrollback clamps to the bottom.

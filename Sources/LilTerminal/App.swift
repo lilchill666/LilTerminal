@@ -78,7 +78,7 @@ extension AppDelegate {
             return
         }
         MainActor.assumeIsolated {
-            encoder.sync(with: Workspace.current?.focusedSession?.terminalView.terminalHandle)
+            Workspace.current?.focusedSession?.terminalView.syncEncoder { encoder.sync(with: $0) }
         }
 
         let cases: [(String, String, String, UInt16, NSEvent.ModifierFlags)] = [

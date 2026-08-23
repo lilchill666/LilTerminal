@@ -293,6 +293,9 @@ private struct TopBar: View {
         }
         .frame(height: barHeight)
         .frame(maxWidth: .infinity)
+        // The only part of the window that drags it. Behind the bar's controls
+        // so they keep their own clicks.
+        .background(WindowDragArea())
         .surface(prefs.topBar, slot: .top, theme: theme,
                  cornerRadius: CGFloat(prefs.pillCornerRadius))
         .animation(workspace.anim(.paneMove), value: workspace.selectedTab?.isSplit)

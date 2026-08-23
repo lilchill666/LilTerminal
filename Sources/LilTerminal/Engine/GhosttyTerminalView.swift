@@ -36,6 +36,8 @@ final class GhosttyTerminalView: NSView {
     var onOutput: (() -> Void)?
     /// Fires on real keyboard or mouse input, for the idle heuristic.
     var onUserInput: (() -> Void)?
+    /// Fires per key press; the flag marks Return, which sounds different.
+    var onKeystroke: ((Bool) -> Void)?
     /// Fires with the command line the shell was showing when Return was hit.
     var onCommandSubmitted: ((String) -> Void)?
 
@@ -56,6 +58,7 @@ final class GhosttyTerminalView: NSView {
     /// because the prompt's appearance is not something we can reliably parse.
     private var promptMarks: [Int] = []
     private let promptMarkLimit = 400
+    private var pendingReflow: DispatchWorkItem?
     private var lastTitle: String?
     private var lastDirectory: String?
     private static let debug = ProcessInfo.processInfo.environment["LILTERM_DEBUG"] != nil
@@ -81,7 +84,6 @@ final class GhosttyTerminalView: NSView {
 
         pty.onOutput = { [weak self] bytes in
             guard let self else { return }
-            self.dbg("feed \(bytes.count) bytes")
             self.core.feed(bytes)
             self.scheduleRefresh()
             DispatchQueue.main.async { self.onOutput?() }
@@ -120,11 +122,6 @@ final class GhosttyTerminalView: NSView {
     /// Leaves the shell running; used when quitting with persistence on.
     func detach() { pty.detach() }
 
-    func dbg(_ m: String) {
-        guard Self.debug else { return }
-        FileHandle.standardError.write("VIEW \(UInt(bitPattern: ObjectIdentifier(self).hashValue) % 100000) \(m)\n".data(using: .utf8)!)
-    }
-
     func send(_ bytes: [UInt8]) {
         core.scrollToBottom()
         pty.write(bytes)
@@ -160,6 +157,9 @@ final class GhosttyTerminalView: NSView {
     }
 
     private func reflow() {
+        pendingReflow?.cancel()
+        pendingReflow = nil
+
         let size = gridSize()
         guard size.columns != core.columns || size.rows != core.rows else {
             scheduleRefresh()
@@ -167,12 +167,44 @@ final class GhosttyTerminalView: NSView {
         }
         core.resize(columns: size.columns, rows: size.rows,
                     cellWidth: UInt32(cellSize.width), cellHeight: UInt32(cellSize.height))
+        // Reflow moves rows between the screen and scrollback, which leaves the
+        // viewport pointing part-way into history. Every other terminal snaps
+        // back to the live edge on resize; without it the screen shows a window
+        // straddling old scrollback and the active screen.
+        core.scrollToBottom()
         pty.resize(columns: size.columns, rows: size.rows)
+        // Reflow rewraps every row and the child repaints from scratch; there
+        // is nothing left worth diffing against, and a partial repaint here
+        // leaves fragments of the old wrapping on screen.
+        needsDisplay = true
         scheduleRefresh()
+    }
+
+    /// Dragging a window edge delivers a resize per frame. Handing every one of
+    /// them to the engine means dozens of reflows and dozens of SIGWINCHs a
+    /// second, and the child ends up painting for sizes that are already stale —
+    /// which is what shredded full-screen programs mid-drag. One reflow per
+    /// coalescing window is enough to keep the text following the window.
+    private func scheduleReflow() {
+        guard inLiveResize else {
+            reflow()
+            return
+        }
+        guard pendingReflow == nil else { return }
+        let work = DispatchWorkItem { [weak self] in self?.reflow() }
+        pendingReflow = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
     }
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
+        scheduleReflow()
+    }
+
+    override func viewDidEndLiveResize() {
+        super.viewDidEndLiveResize()
+        // The coalesced pass may have been for an intermediate size; the size
+        // the drag settled on is the one that has to reach the child.
         reflow()
     }
 
@@ -181,6 +213,11 @@ final class GhosttyTerminalView: NSView {
         // Output that arrived before the view was on screen has nothing else
         // to trigger a first paint.
         reflow()
+        // A full repaint, not just a refresh. Switching tabs reattaches this
+        // view with its contents unchanged, so the frame diff finds nothing to
+        // invalidate and the pane stayed blank until the next byte of output
+        // happened to arrive — which read as tab switching being slow.
+        needsDisplay = true
         scheduleRefresh()
     }
 
@@ -217,50 +254,27 @@ final class GhosttyTerminalView: NSView {
         }
     }
 
-    /// Swaps in a new frame and repaints only what changed.
+    /// Swaps in a new frame and repaints if anything moved.
     ///
-    /// A full-view repaint on every output batch spends most of its time
-    /// redrawing rows that did not move — which matters exactly when it hurts
-    /// most, during heavy output.
+    /// This used to diff row by row and invalidate only the rows that changed.
+    /// It was measurably wrong: under heavy output and across resizes, rows
+    /// kept pixels from an earlier frame, so old glyphs showed through wherever
+    /// the new content had spaces and lines appeared interleaved. Repainting
+    /// the view is what the coalescer above already bounds to once per runloop
+    /// turn, and at terminal sizes that is a few hundred microseconds of
+    /// CoreText work — far too little to justify a subtle correctness bug.
     private func applyFrame(_ frame: EngineFrame) {
         let previous = frameData
-        let previousCursor = previous.cursor
         frameData = frame
-
-        // Any structural change is cheaper to handle as a full repaint than to
-        // reason about row by row.
-        guard previous.rows.count == frame.rows.count,
-              previous.columns == frame.columns else {
-            needsDisplay = true
-            return
-        }
-
-        var dirty: NSRect = .zero
-        var isEmpty = true
-
-        func invalidate(row: Int) {
-            let rect = NSRect(x: 0, y: padding + CGFloat(row) * cellSize.height,
-                              width: bounds.width, height: cellSize.height)
-            dirty = isEmpty ? rect : dirty.union(rect)
-            isEmpty = false
-        }
-
-        for (index, row) in frame.rows.enumerated() where row != previous.rows[index] {
-            invalidate(row: row.index)
-        }
-        // The caret leaves a hole behind it; both ends need repainting.
-        if previousCursor != frame.cursor {
-            if let cursor = previousCursor { invalidate(row: cursor.row) }
-            if let cursor = frame.cursor { invalidate(row: cursor.row) }
-        }
-
-        if !isEmpty { setNeedsDisplay(dirty) }
+        guard previous.columns != frame.columns
+                || previous.cursor != frame.cursor
+                || previous.rows != frame.rows else { return }
+        needsDisplay = true
     }
 
     // MARK: - Drawing
 
     override func draw(_ dirtyRect: NSRect) {
-        dbg("draw rows=\(frameData.rows.count) cursor=\(String(describing: frameData.cursor)) bounds=\(bounds.size)")
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
         // Erase first. Filling with a translucent colour composites over the
@@ -277,7 +291,9 @@ final class GhosttyTerminalView: NSView {
         for row in frameData.rows {
             let y = padding + CGFloat(row.index) * cellSize.height
             guard y < bounds.height, y + cellSize.height > 0 else { continue }
-            // With a partial invalidation, only the affected rows are redrawn.
+            // Still honoured: AppKit can hand us a sub-rect of its own accord
+            // (an overlapping window, a first paint), and skipping rows outside
+            // it is free.
             guard y < dirtyRect.maxY, y + cellSize.height > dirtyRect.minY else { continue }
             if Self.debug { rowsDrawn += 1 }
 
@@ -447,13 +463,14 @@ final class GhosttyTerminalView: NSView {
 
     override func keyDown(with event: NSEvent) {
         onUserInput?()
+        onKeystroke?(event.keyCode == 36 || event.keyCode == 76)
         // Read the line before sending: once Return reaches the shell the line
         // is gone.
         if event.keyCode == 36 || event.keyCode == 76 {
             if let command = currentInputLine() { onCommandSubmitted?(command) }
             recordPromptMark()
         }
-        encoder?.sync(with: core.terminalHandle)
+        core.withTerminal { encoder?.sync(with: $0) }
         if let bytes = encoder?.encode(event) {
             send(bytes)
         }
@@ -640,7 +657,7 @@ final class GhosttyTerminalView: NSView {
 
     private func sendMouse(_ action: GhosttyMouseAction, button: GhosttyMouseButton?,
                            event: NSEvent) {
-        mouse?.sync(with: core.terminalHandle)
+        core.withTerminal { mouse?.sync(with: $0) }
         if let bytes = mouse?.encode(action: action, button: button,
                                      modifiers: event.modifierFlags,
                                      point: terminalPoint(event)) {
@@ -822,8 +839,10 @@ final class GhosttyTerminalView: NSView {
     /// True when the running program has asked for mouse events.
     var mouseTrackingActive: Bool { core.wantsMouseTracking }
 
-    /// For syncing encoders to this terminal's current modes.
-    var terminalHandle: GhosttyTerminal? { core.terminalHandle }
+    /// Syncs an encoder to this terminal's modes, under the engine lock.
+    func syncEncoder(_ body: (GhosttyTerminal) -> Void) {
+        core.withTerminal(body)
+    }
 
     func clearSelection() {
         selectionAnchor = nil

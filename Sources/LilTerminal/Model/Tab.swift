@@ -28,6 +28,10 @@ final class Tab: ObservableObject, Identifiable {
     /// Locked tabs refuse to close without confirmation.
     @Published var isLocked = false
 
+    /// Last aggregate published to observers, so a metrics tick that changes
+    /// nothing visible does not re-render the row. Deliberately not @Published.
+    var lastMetricsSignature: Int = 0
+
     init(session: TerminalSession) {
         self.root = .leaf(session.id)
         self.sessions = [session]

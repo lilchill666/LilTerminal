@@ -115,10 +115,24 @@ extension AppTheme {
                "#57575C", "#8F2420", "#245A2A", "#664600",
                "#1F55B0", "#5F2F8C", "#08595C", "#4A4A50"])
 
+    /// A P1 phosphor CRT: near-black glass, green everything. The ANSI ramp is
+    /// deliberately not colourful — a monochrome monitor had one phosphor, so
+    /// "red" and "blue" were only ever brighter or dimmer green. Keeping that
+    /// is what makes it read as the real thing rather than a green tint.
+    static let phosphor = AppTheme(
+        id: UUID(uuidString: "11111111-0000-4000-A000-000000000006")!,
+        name: "Phosphor", isDark: true, isBuiltIn: true,
+        background: "#020A02", foreground: "#33FF66",
+        cursor: "#7CFFA8", selection: "#0E4D22", accent: "#33FF66",
+        ansi: ["#0A1F0E", "#1FCC4E", "#33FF66", "#26E058",
+               "#1AB847", "#2BEF5E", "#45FF77", "#8CFFB4",
+               "#14401F", "#5CFF88", "#7CFFA8", "#6BFF99",
+               "#4DFF80", "#8CFFB4", "#A3FFC4", "#D6FFE4"])
+
     /// Built-in IDs are fixed constants, not fresh UUIDs. A generated id would
     /// differ on every launch, so the saved "active theme" would never match
     /// and the app would silently reset to the default each time it started.
-    static let builtIns: [AppTheme] = [lilDark, tokyoNight, nord, solarizedDark, paper]
+    static let builtIns: [AppTheme] = [lilDark, tokyoNight, nord, solarizedDark, paper, phosphor]
 }
 
 /// Owns the theme list, the active selection, and import/export.

@@ -99,6 +99,9 @@ public final class PTY {
                         self.onOutput?(UnsafeRawBufferPointer(rebasing: raw.prefix(count)))
                     }
                     if count < self.buffer.count { break }
+                } else if count < 0 && errno == EINTR {
+                    // A signal landed mid-read; the data is still queued.
+                    continue
                 } else {
                     break
                 }
@@ -128,11 +131,25 @@ public final class PTY {
             var offset = 0
             bytes.withUnsafeBytes { raw in
                 guard let base = raw.baseAddress else { return }
-                // Short writes are normal on a pty; loop until drained.
+                // Short writes are the norm here: the master is non-blocking and
+                // the line discipline's input buffer is about 1 KB, so anything
+                // larger — a pasted block of a dozen lines — fills it and the
+                // next write returns EAGAIN. Treating that as failure silently
+                // truncated the paste; the only correct response is to wait for
+                // the fd to drain and carry on.
                 while offset < raw.count {
                     let written = Darwin.write(masterFD, base + offset, raw.count - offset)
-                    if written <= 0 { break }
-                    offset += written
+                    if written > 0 {
+                        offset += written
+                        continue
+                    }
+                    guard errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR else { break }
+                    if errno != EINTR {
+                        var pfd = pollfd(fd: masterFD, events: Int16(POLLOUT), revents: 0)
+                        // The child may never drain (stopped, or not reading);
+                        // a bounded wait keeps this from pinning the queue.
+                        guard poll(&pfd, 1, 2000) > 0 else { break }
+                    }
                 }
             }
         }

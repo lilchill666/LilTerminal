@@ -54,6 +54,13 @@ final class TerminalSession: ObservableObject, Identifiable {
         self.terminalView = view
 
         view.onUserInput = { [weak self] in self?.noteInteraction() }
+        view.onKeystroke = { isReturn in
+            // Reads preferences at press time rather than caching them, so the
+            // setting takes effect immediately and a disabled feature costs one
+            // boolean check per key.
+            guard let prefs = Workspace.current?.prefs, prefs.typingSounds else { return }
+            TypingSounds.shared.play(isReturn: isReturn, volume: prefs.typingSoundVolume)
+        }
         view.resolveDirectory = { [weak self] in self?.workingDirectory }
         view.onCommandSubmitted = { [weak self] command in
             guard let self else { return }

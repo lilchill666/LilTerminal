@@ -37,6 +37,10 @@ struct Preferences: Codable, Equatable {
     var showTabCount = true
 
     // Status bar content
+    var typingSounds = false
+    var typingSoundSet: TypingSoundSet = .click
+    var typingSoundVolume: Double = 0.4
+
     var showStatusBar = true
     var showStatusShell = true
     var showStatusMetrics = true

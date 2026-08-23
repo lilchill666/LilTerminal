@@ -321,6 +321,33 @@ designed to outlive the app.
 
 ### Three bugs this shook out
 
+**libghostty-vt requires exclusive access, and that means every call.** The
+lock was held around `feed` and `snapshot` but two paths reached the terminal
+without it: `scrollToBottom`, which runs on every keystroke, and a
+`terminalHandle` property that handed the raw pointer to the key and mouse
+encoders so they could read terminal modes. Both ran on the main thread while
+the pty queue was inside the parser. The result was a scrambled grid — fragments
+of one line inside another, columns shifted by a character or two — which looks
+exactly like a renderer bug and is not one. The handle is gone; `withTerminal`
+is the only way in.
+
+**A pty master is non-blocking, so a large write comes back short.** The write
+loop treated `EAGAIN` as failure and stopped, which silently truncated anything
+bigger than the line discipline's ~1 KB input buffer — about eleven lines of
+pasted text. It now waits for the fd to drain with `poll` and continues.
+
+**A resize per frame is a resize too many.** Dragging a window edge delivers one
+`setFrameSize` per frame; handing each to the engine meant dozens of reflows and
+SIGWINCHs a second, with the child painting for sizes that were already stale.
+Live resizes are coalesced to one reflow per 50 ms, with an authoritative pass
+on `viewDidEndLiveResize`, and the viewport snaps back to the live edge because
+reflow moves rows between the screen and scrollback.
+
+**A metrics tick that changes nothing must not re-render.** Every tab row was
+nudged once a second whether or not its numbers had moved, which tore down any
+open context menu the moment the pointer travelled toward it. Rows now compare
+at display granularity — rounded percent, whole megabytes, process count.
+
 **Adding a subview does not mark a view as needing layout.** A pane container
 is reused when SwiftUI switches it to another session, so the new terminal has
 to be given a frame at the moment it is attached — AppKit will not call

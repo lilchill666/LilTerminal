@@ -145,6 +145,7 @@ private struct GroupSection: View {
     @ObservedObject var workspace: Workspace
     let pill: Namespace.ID
     @Binding var renamingGroup: UUID?
+    @FocusState private var groupRenameFocused: Bool
     @Binding var draftName: String
     @State private var isDropTarget = false
 
@@ -195,9 +196,16 @@ private struct GroupSection: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(theme.textPrimary)
+                    .focused($groupRenameFocused)
+                    .onAppear { groupRenameFocused = true }
+                    .onExitCommand {
+                        renamingGroup = nil
+                        workspace.focusTerminal()
+                    }
                     .onSubmit {
                         workspace.rename(group: group, to: draftName)
                         renamingGroup = nil
+                        workspace.focusTerminal()
                     }
             } else {
                 Text(group.name.uppercased())
@@ -298,6 +306,7 @@ private struct TabRow: View {
     @State private var isRenaming = false
     @State private var draftTitle = ""
     @State private var isDropTarget = false
+    @FocusState private var renameFocused: Bool
 
     private var prefs: Preferences { workspace.prefs }
     private var theme: AppTheme { workspace.themes.active }
@@ -335,8 +344,13 @@ private struct TabRow: View {
                             .textFieldStyle(.plain)
                             .font(.system(size: prefs.density.titleSize, weight: .medium))
                             .foregroundStyle(theme.textPrimary)
+                            .focused($renameFocused)
                             .onSubmit { commitRename() }
-                            .onExitCommand { isRenaming = false }
+                            .onExitCommand { endRename() }
+                            // The terminal takes first responder aggressively;
+                            // without claiming it back here the caret stays in
+                            // the terminal and typing goes to the shell.
+                            .onAppear { renameFocused = true }
                     } else {
                         Text(tab.displayTitle)
                             .font(.system(size: prefs.density.titleSize,
@@ -515,12 +529,23 @@ private struct TabRow: View {
 
     private func beginRename() {
         draftTitle = tab.customTitle ?? tab.displayTitle
+        // Renaming a tab you are not looking at is confusing; select it first,
+        // which also stops the click that started the rename from switching
+        // tabs out from under the field.
+        if !isSelected { workspace.select(tab) }
         isRenaming = true
     }
 
     private func commitRename() {
         workspace.rename(tab, to: draftTitle)
+        endRename()
+    }
+
+    /// Leaves the field and returns the keyboard to the terminal.
+    private func endRename() {
         isRenaming = false
+        renameFocused = false
+        workspace.focusTerminal()
     }
 
     @ViewBuilder private var contextMenu: some View {
