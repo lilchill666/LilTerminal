@@ -194,6 +194,12 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("i", modifiers: [.command, .option])
 
+            Button(workspace.prefs.typingSounds ? "Mute Typing Sounds" : "Typing Sounds") {
+                workspace.prefs.typingSounds.toggle()
+            }
+            // ⌥⌘M rather than ⌘M, which the system owns for Minimise.
+            .keyboardShortcut("m", modifiers: [.command, .option])
+
             Button("Filter Tabs…") {
                 NotificationCenter.default.post(name: .focusTabFilter, object: nil)
             }

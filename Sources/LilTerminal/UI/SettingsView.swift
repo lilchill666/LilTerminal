@@ -53,10 +53,26 @@ struct SettingsView: View {
             // controls aligned in a column on the right. Hand-rolled HStacks
             // produced a ragged edge that read as unfinished.
             Form {
+                // A theme that disables effects owns these settings while it is
+                // active. Leaving the controls live would let someone change a
+                // value that is about to be overwritten, and hiding them would
+                // just look like a missing feature.
+                if workspace.effectsSuppressed, section == .background || section == .feel {
+                    SwiftUI.Section {
+                        Label {
+                            Text("“\(theme.name)” turns effects off while it is active. Your blur, glass and transparency settings are saved and come back when you switch to another theme.")
+                        } icon: {
+                            Image(systemName: "info.circle")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+
                 switch section {
                 case .sidebar:    sidebarSection
                 case .statusBar:  statusBarSection
-                case .background: backgroundSection
+                case .background: backgroundSection.disabled(workspace.effectsSuppressed)
                 case .ai:         AISettingsSection(workspace: workspace, ai: workspace.ai, prefs: prefs)
                 case .feel:       feelSection
                 case .terminal:   terminalSection
@@ -228,6 +244,10 @@ struct SettingsView: View {
                 ForEach(TypingSoundSet.allCases) { Text($0.label).tag($0) }
             }
             .disabled(!current.typingSounds)
+
+            Text(current.typingSoundSet.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             LabeledContent("Volume") {
                 slider(prefs.typingSoundVolume, 0...1, 0.05,

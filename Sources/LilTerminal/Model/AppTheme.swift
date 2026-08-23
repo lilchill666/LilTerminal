@@ -19,10 +19,57 @@ struct AppTheme: Codable, Identifiable, Hashable {
     /// Exactly 16 entries: ANSI 0-7 then their bright variants.
     var ansi: [String]
 
+    /// Turns off blur, glass, transparency and rounded chrome while active.
+    ///
+    /// A period look falls apart the moment it is put behind frosted glass, so
+    /// a theme is allowed to say "not on me". The settings it displaces are
+    /// saved and handed back when another theme takes over.
+    var disablesEffects: Bool = false
+    /// Draws CRT scanlines over the terminal.
+    var scanlines: Bool = false
+
     enum CodingKeys: String, CodingKey {
         case id, name, isDark, background, foreground, cursor, selection, accent, ansi
+        case disablesEffects, scanlines
         // isBuiltIn is deliberately not encoded: an exported built-in becomes
         // an ordinary editable theme on the machine that imports it.
+    }
+
+    init(id: UUID = UUID(), name: String, isDark: Bool = true, isBuiltIn: Bool = false,
+         background: String, foreground: String, cursor: String, selection: String,
+         accent: String, ansi: [String],
+         disablesEffects: Bool = false, scanlines: Bool = false) {
+        self.id = id
+        self.name = name
+        self.isDark = isDark
+        self.isBuiltIn = isBuiltIn
+        self.background = background
+        self.foreground = foreground
+        self.cursor = cursor
+        self.selection = selection
+        self.accent = accent
+        self.ansi = ansi
+        self.disablesEffects = disablesEffects
+        self.scanlines = scanlines
+    }
+
+    /// Written by hand so that a theme saved before a field existed still
+    /// decodes. The synthesised version throws on a missing key, and one throw
+    /// here fails the whole settings document and resets everything.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        isDark = try container.decodeIfPresent(Bool.self, forKey: .isDark) ?? true
+        background = try container.decode(String.self, forKey: .background)
+        foreground = try container.decode(String.self, forKey: .foreground)
+        cursor = try container.decode(String.self, forKey: .cursor)
+        selection = try container.decode(String.self, forKey: .selection)
+        accent = try container.decode(String.self, forKey: .accent)
+        ansi = try container.decode([String].self, forKey: .ansi)
+        disablesEffects = try container.decodeIfPresent(Bool.self, forKey: .disablesEffects) ?? false
+        scanlines = try container.decodeIfPresent(Bool.self, forKey: .scanlines) ?? false
+        isBuiltIn = false
     }
 
     var isValid: Bool {
@@ -127,12 +174,27 @@ extension AppTheme {
         ansi: ["#0A1F0E", "#1FCC4E", "#33FF66", "#26E058",
                "#1AB847", "#2BEF5E", "#45FF77", "#8CFFB4",
                "#14401F", "#5CFF88", "#7CFFA8", "#6BFF99",
-               "#4DFF80", "#8CFFB4", "#A3FFC4", "#D6FFE4"])
+               "#4DFF80", "#8CFFB4", "#A3FFC4", "#D6FFE4"],
+        disablesEffects: true, scanlines: true)
+
+    /// The beige box: a plastic-cased machine under office light. Warm grey-white
+    /// screen, ink-dark text, and a palette mixed from printer ribbon rather than
+    /// from a phosphor — nothing saturated, because nothing on that hardware was.
+    static let beigeBox = AppTheme(
+        id: UUID(uuidString: "11111111-0000-4000-A000-000000000007")!,
+        name: "Beige Box", isDark: false, isBuiltIn: true,
+        background: "#D9D4C4", foreground: "#2B2822",
+        cursor: "#2B2822", selection: "#B6AF98", accent: "#8A6F3C",
+        ansi: ["#2B2822", "#9C3B2E", "#4A6B3A", "#8A6F3C",
+               "#3F5C7A", "#6E4A72", "#3F6E6B", "#7A7462",
+               "#5A554A", "#B84E3D", "#5E8449", "#A8873F",
+               "#4F7396", "#8A5E8F", "#4F8985", "#F2EEE2"],
+        disablesEffects: true, scanlines: false)
 
     /// Built-in IDs are fixed constants, not fresh UUIDs. A generated id would
     /// differ on every launch, so the saved "active theme" would never match
     /// and the app would silently reset to the default each time it started.
-    static let builtIns: [AppTheme] = [lilDark, tokyoNight, nord, solarizedDark, paper, phosphor]
+    static let builtIns: [AppTheme] = [lilDark, tokyoNight, nord, solarizedDark, paper, phosphor, beigeBox]
 }
 
 /// Owns the theme list, the active selection, and import/export.

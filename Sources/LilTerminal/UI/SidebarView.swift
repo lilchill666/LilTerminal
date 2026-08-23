@@ -391,8 +391,14 @@ private struct TabRow: View {
         .padding(.vertical, prefs.density.rowPaddingV)
         .background(rowBackground)
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { beginRename() }
+        // Selection fires on the first click. Declaring a count-2 tap next to a
+        // count-1 tap makes SwiftUI hold the single tap back until it knows no
+        // second click is coming — the system double-click interval, up to a
+        // second — which is what made switching tabs feel slow, and left the
+        // pointer already moving by the time a drag could have started.
+        // A simultaneous gesture is recognised in parallel and delays nothing.
         .onTapGesture { withAnimation(workspace.anim(.paneMove)) { workspace.select(tab) } }
+        .simultaneousGesture(TapGesture(count: 2).onEnded { beginRename() })
         .onHover { hovering in
             withAnimation(workspace.anim(.rowState)) { isHovering = hovering }
         }

@@ -3,7 +3,7 @@ import AppKit
 
 /// The sample set used for keystrokes.
 enum TypingSoundSet: String, Codable, CaseIterable, Identifiable {
-    case click, typewriter, soft
+    case click, typewriter, soft, cosmic
     var id: String { rawValue }
 
     var label: String {
@@ -11,6 +11,16 @@ enum TypingSoundSet: String, Codable, CaseIterable, Identifiable {
         case .click:      return "Mechanical"
         case .typewriter: return "Typewriter"
         case .soft:       return "Soft"
+        case .cosmic:     return "Cosmic"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .click:      return "A plastic keycap: short, bright, dry."
+        case .typewriter: return "A type bar hitting the platen, with the metal ring after it."
+        case .soft:       return "A rubber-dome key heard through a desk."
+        case .cosmic:     return "A ship's console from a film made before anyone had used a computer."
         }
     }
 }

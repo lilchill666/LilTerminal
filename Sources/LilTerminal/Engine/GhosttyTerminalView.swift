@@ -25,6 +25,8 @@ final class GhosttyTerminalView: NSView {
     var selectionColor: NSColor = .selectedTextBackgroundColor { didSet { needsDisplay = true } }
     /// 0 leaves the background unpainted entirely — fully transparent.
     var backgroundOpacity: CGFloat = 1 { didSet { needsDisplay = true } }
+    /// CRT raster overlay, set from the active theme.
+    var showsScanlines = false { didSet { if showsScanlines != oldValue { needsDisplay = true } } }
     var padding: CGFloat = 12 { didSet { reflow() } }
 
     // MARK: Callbacks
@@ -335,6 +337,7 @@ final class GhosttyTerminalView: NSView {
 
         drawHoveredLink(in: context)
         drawCursor(in: context)
+        drawScanlines(in: context, clip: dirtyRect)
 
         if Self.debug {
             drawCount += 1
@@ -346,6 +349,26 @@ final class GhosttyTerminalView: NSView {
                         .data(using: .utf8)!)
             }
         }
+    }
+
+    /// Lays a CRT's raster over the text.
+    ///
+    /// Every other line, at low alpha: enough to read as a phosphor screen at a
+    /// glance, light enough that it does not fight the glyphs underneath. Drawn
+    /// as one path rather than a fill per line, so the whole overlay is a single
+    /// stroke however tall the view is.
+    private func drawScanlines(in context: CGContext, clip: NSRect) {
+        guard showsScanlines else { return }
+        let spacing: CGFloat = 3
+        let path = CGMutablePath()
+        var y = (clip.minY / spacing).rounded(.down) * spacing
+        while y < clip.maxY {
+            path.addRect(CGRect(x: clip.minX, y: y, width: clip.width, height: 1))
+            y += spacing
+        }
+        context.setFillColor(NSColor.black.withAlphaComponent(0.16).cgColor)
+        context.addPath(path)
+        context.fillPath()
     }
 
     /// Draws a run of cells, each pinned to its own grid column.

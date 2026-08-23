@@ -145,7 +145,13 @@ final class Workspace: NSObject, ObservableObject {
         // would never hear about a theme change and the chrome would keep the
         // old palette while the terminals repainted. Forward its changes.
         themes.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .sink { [weak self] _ in
+                guard let self else { return }
+                // Runs after ThemeStore has settled, so `active` is the theme
+                // being switched to rather than the one being left.
+                DispatchQueue.main.async { self.syncEffectsToTheme() }
+                self.objectWillChange.send()
+            }
             .store(in: &cancellables)
 
         sampler.start()
@@ -155,6 +161,7 @@ final class Workspace: NSObject, ObservableObject {
         Workspace.current = self
         // Only spins the audio engine up if the feature is already on.
         TypingSounds.shared.configure(enabled: prefs.typingSounds, set: prefs.typingSoundSet)
+        syncEffectsToTheme()
     }
 
     /// One monitor rather than a TerminalView subclass: `keyDown` is not open
@@ -704,6 +711,29 @@ final class Workspace: NSObject, ObservableObject {
     }
 
     /// Re-applies the active theme; used after editing it in the theme editor.
+    /// Applies or lifts a theme's effect override.
+    ///
+    /// The displaced settings live in the settings document rather than in
+    /// memory, so quitting while a flat theme is active and switching away after
+    /// a relaunch still gives the effects back.
+    func syncEffectsToTheme() {
+        let wantsFlat = themes.active.disablesEffects
+        let backup = SettingsStore.shared.document.effectsBackup
+
+        if wantsFlat, backup == nil {
+            let snapshot = prefs.effectsSnapshot
+            SettingsStore.shared.update { $0.effectsBackup = snapshot }
+            prefs.applyFlatChrome()
+        } else if !wantsFlat, let backup {
+            prefs.restoreEffects(backup)
+            SettingsStore.shared.update { $0.effectsBackup = nil }
+        }
+    }
+
+    /// True while the active theme is suppressing the effect settings, so the
+    /// UI can explain why those controls are inert instead of looking broken.
+    var effectsSuppressed: Bool { themes.active.disablesEffects }
+
     func refreshTheme() {
         for session in allSessions {
             Theme.apply(themes.active, to: session.terminalView, fontSize: fontSize,

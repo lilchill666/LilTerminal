@@ -166,6 +166,28 @@ struct ThemeEditor: View {
             .toggleStyle(.checkbox)
             .font(.caption)
             .disabled(selection.isBuiltIn)
+
+            Toggle("Disables all effects", isOn: Binding(
+                get: { selection.disablesEffects },
+                set: { selection.disablesEffects = $0; commit() }
+            ))
+            .toggleStyle(.checkbox)
+            .font(.caption)
+            .disabled(selection.isBuiltIn)
+            .help("Turns off blur, glass, transparency and rounded chrome while this theme is active. Your effect settings are given back when you switch away.")
+
+            Toggle("CRT scanlines", isOn: Binding(
+                get: { selection.scanlines },
+                set: { selection.scanlines = $0; commit() }
+            ))
+            .toggleStyle(.checkbox)
+            .font(.caption)
+            .disabled(selection.isBuiltIn)
+
+            Text("A theme that disables effects keeps its own look intact — a period design falls apart behind frosted glass. Whatever blur and transparency you had is saved and restored when another theme takes over.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

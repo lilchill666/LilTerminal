@@ -31,6 +31,7 @@ enum Theme {
         // The renderer leaves default-background cells unpainted, so this alone
         // makes the terminal translucent — no engine cooperation required.
         view.backgroundOpacity = max(0.05, min(1, opacity))
+        view.showsScanlines = theme.scanlines
         view.padding = inset
         view.font = monoFont(size: fontSize, name: fontName)
         view.needsDisplay = true

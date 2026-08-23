@@ -10,6 +10,9 @@ struct SettingsDocument: Codable {
     var groups: [TabGroup] = []
     var activeThemeID: String?
     var appIsLocked = false
+    /// Effect settings displaced by a theme that disables them, kept so the
+    /// switch back is lossless. Optional, so an older file simply has none.
+    var effectsBackup: EffectsSnapshot?
     var savedAt = Date()
 }
 
