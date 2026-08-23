@@ -103,6 +103,8 @@ final class GhosttyCore {
         defer { lock.unlock() }
         self.columns = columns
         self.rows = rows
+        self.cellWidth = cellWidth
+        self.cellHeight = cellHeight
         _ = ghostty_terminal_resize(terminal, columns, rows, cellWidth, cellHeight)
     }
 
@@ -155,7 +157,43 @@ final class GhosttyCore {
         }
         _ = ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_DEVICE_ATTRIBUTES,
                                  unsafeBitCast(attributes, to: UnsafeRawPointer.self))
+
+        // XTWINOPS size queries (CSI 14/16/18 t) and, when a program turns on
+        // mode 2048, the in-band resize report. A TUI that asks how big the
+        // window is and never hears back has to fall back to guessing, and a
+        // program that asked for in-band resize notifications gets none at all
+        // — it is then relying on SIGWINCH alone, which is exactly the race
+        // mode 2048 exists to avoid.
+        let size: GhosttyTerminalSizeFn = { _, userdata, out in
+            guard let userdata, let out else { return false }
+            let core = Unmanaged<GhosttyCore>.fromOpaque(userdata).takeUnretainedValue()
+            out.pointee.rows = core.rows
+            out.pointee.columns = core.columns
+            out.pointee.cell_width = core.cellWidth
+            out.pointee.cell_height = core.cellHeight
+            return true
+        }
+        _ = ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_SIZE,
+                                 unsafeBitCast(size, to: UnsafeRawPointer.self))
+
+        // CSI ? 996 n. Programs use this to pick a palette that suits the
+        // background they are actually being drawn on.
+        let scheme: GhosttyTerminalColorSchemeFn = { _, userdata, out in
+            guard let userdata, let out else { return false }
+            let core = Unmanaged<GhosttyCore>.fromOpaque(userdata).takeUnretainedValue()
+            out.pointee = core.isDarkBackground ? GHOSTTY_COLOR_SCHEME_DARK
+                                                : GHOSTTY_COLOR_SCHEME_LIGHT
+            return true
+        }
+        _ = ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_COLOR_SCHEME,
+                                 unsafeBitCast(scheme, to: UnsafeRawPointer.self))
     }
+
+    /// Cell metrics, kept for size reports. Set alongside every resize.
+    private(set) var cellWidth: UInt32 = 8
+    private(set) var cellHeight: UInt32 = 16
+    /// Whether the active theme's background is dark, for CSI ? 996 n.
+    var isDarkBackground = true
 
     /// Installs a theme's colours in the engine.
     ///

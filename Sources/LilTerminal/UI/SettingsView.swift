@@ -316,6 +316,18 @@ struct SettingsView: View {
     // MARK: - Terminal
 
     @ViewBuilder private var terminalSection: some View {
+        SwiftUI.Section {
+            Toggle("Use Option as Meta", isOn: prefs.optionAsMeta)
+        } header: {
+            Text("Keyboard")
+        } footer: {
+            Text(current.optionAsMeta
+                 ? "⌥B and ⌥F move by word, and ⌥ sends ESC + the key. Option no longer types accented characters."
+                 : "Option composes characters the way macOS does — ⌥G types “©”. Turn this on for readline word-motion (⌥B, ⌥F).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
         SwiftUI.Section("Font") {
             Picker("Family", selection: prefs.fontName) {
                 ForEach(Theme.availableMonoFonts(), id: \.self) { Text($0).tag($0) }

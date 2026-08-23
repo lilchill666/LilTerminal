@@ -321,6 +321,24 @@ designed to outlive the app.
 
 ### Three bugs this shook out
 
+**Option was a modifier half the time and Meta the other half.** Whether the
+ALT bit reached the encoder depended on whether Control happened to be held too,
+because the branch that decides what text to send also decided that. So ⌥G typed
+"©" while ⌃⌥G sent `ESC BEL` — and a stray ESC reads as Escape to anything with
+a text field, which silently emptied the line. Option is now resolved in one
+place, with a preference: off (the macOS default) it composes characters and
+never reaches the encoder; on, it stays in the modifiers so the Kitty keyboard
+protocol still reports it, and an ESC prefix is added unless the encoder already
+produced an escape sequence — a second ESC is the bug, not the fix.
+
+**Resize research.** Reflowing the primary screen and its scrollback while
+leaving the alternate screen alone is what VTE, Ghostty and WezTerm all do, and
+libghostty-vt does it for us. The artefacts that survive a resize are largely
+the *application* repainting against a prompt position it lost during reflow;
+Ghostty has the same reports, and its maintainers point at the shell rather than
+the terminal. Claude Code's own duplication-on-resize is filed as a Claude Code
+bug that reproduces in Terminal.app too.
+
 **A paste has to be bracketed or it is just fast typing.** Nothing wrapped
 pasted text in `ESC[200~`/`ESC[201~`, so an application had no way to tell a
 paste from someone typing quickly and fell back to guessing from timing. One

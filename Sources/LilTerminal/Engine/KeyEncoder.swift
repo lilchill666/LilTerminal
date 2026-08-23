@@ -11,6 +11,16 @@ final class KeyEncoder {
     private var encoder: GhosttyKeyEncoder?
     private var event: GhosttyKeyEvent?
 
+    /// Whether Option is Meta (ESC-prefixes the key) or an ordinary macOS
+    /// modifier that composes characters.
+    ///
+    /// It has to be one or the other for every combination. Passing Option
+    /// through to the encoder only when Control happened to be held as well
+    /// made ⌥G type "©" while ⌃⌥G sent ESC BEL — and that stray ESC reads as
+    /// Escape to anything with a text field, which is why the combination
+    /// silently emptied the line.
+    var optionAsMeta = false
+
     init?() {
         guard ghostty_key_encoder_new(nil, &encoder) == GHOSTTY_SUCCESS,
               ghostty_key_event_new(nil, &event) == GHOSTTY_SUCCESS else { return nil }
@@ -30,9 +40,21 @@ final class KeyEncoder {
     func encode(_ nsEvent: NSEvent) -> [UInt8]? {
         guard let encoder, let event else { return nil }
 
+        // Option is resolved here rather than by the encoder. Its own
+        // macos-option-as-alt setting is for embedders that report Option
+        // themselves, and the ALT bit is ours to set — so this is the layer
+        // where the question is actually decided, which is also where Ghostty
+        // decides it. Meta is applied as an ESC prefix below.
+        var flags = nsEvent.modifierFlags
+        // As an ordinary modifier Option has already done its work — AppKit
+        // composed the character — so the encoder must not hear about it. As
+        // Meta it stays, so that a program using the Kitty keyboard protocol
+        // is told which modifiers were really held.
+        if !optionAsMeta { flags.remove(.option) }
+
         ghostty_key_event_set_action(event, GHOSTTY_KEY_ACTION_PRESS)
         ghostty_key_event_set_key(event, Self.key(for: nsEvent))
-        ghostty_key_event_set_mods(event, Self.mods(for: nsEvent.modifierFlags))
+        ghostty_key_event_set_mods(event, Self.mods(for: flags))
 
         if let scalar = nsEvent.charactersIgnoringModifiers?.unicodeScalars.first {
             ghostty_key_event_set_unshifted_codepoint(event, scalar.value)
@@ -41,9 +63,16 @@ final class KeyEncoder {
         // The text AppKit already resolved (dead keys, IME, shifted symbols).
         // Control combinations carry no useful characters, so they are left to
         // the encoder to derive from the key itself.
+        // With Option as Meta the composed character is not what was meant:
+        // ⌥B is "back one word", not "∫". Leaving the text out lets the encoder
+        // derive ESC+key from the key itself.
+        // With Option as Meta the composed character is not what was meant: ⌥B
+        // is "back one word", not "∫". The unmodified key is what gets escaped.
+        let optionIsMeta = optionAsMeta && nsEvent.modifierFlags.contains(.option)
+        let source = optionIsMeta ? nsEvent.charactersIgnoringModifiers : nsEvent.characters
         let wantsText = !nsEvent.modifierFlags.contains(.control)
-            && (nsEvent.characters?.unicodeScalars.allSatisfy { $0.value >= 0x20 } ?? false)
-        var utf8 = wantsText ? Array((nsEvent.characters ?? "").utf8).map { CChar(bitPattern: $0) } : []
+            && (source?.unicodeScalars.allSatisfy { $0.value >= 0x20 } ?? false)
+        let utf8 = wantsText ? Array((source ?? "").utf8).map { CChar(bitPattern: $0) } : []
 
         var buffer = [CChar](repeating: 0, count: 128)
         var length = 0
@@ -70,7 +99,14 @@ final class KeyEncoder {
         }
 
         guard status == GHOSTTY_SUCCESS, length > 0 else { return nil }
-        return buffer.prefix(length).map { UInt8(bitPattern: $0) }
+        let bytes = buffer.prefix(length).map { UInt8(bitPattern: $0) }
+        // Alt-sends-escape, which is all Meta means. Skipped when the encoder
+        // has already produced an escape sequence of its own — ⌃⌥ combinations
+        // and anything encoded as CSI arrive prefixed already, and a second ESC
+        // would read as a bare Escape keypress, which is exactly what emptied
+        // the input line.
+        guard optionIsMeta, bytes.first != 0x1b else { return bytes }
+        return [0x1b] + bytes
     }
 
     private static func mods(for flags: NSEvent.ModifierFlags) -> GhosttyMods {

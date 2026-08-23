@@ -37,6 +37,11 @@ struct Preferences: Codable, Equatable {
     var showTabCount = true
 
     // Status bar content
+    /// Option as Meta sends ESC+key, which is what readline word-motion
+    /// (⌥B, ⌥F) expects. Off by default, matching macOS: Option composes
+    /// characters, so ⌥G types "©".
+    var optionAsMeta = false
+
     var typingSounds = false
     var typingSoundSet: TypingSoundSet = .click
     var typingSoundVolume: Double = 0.4

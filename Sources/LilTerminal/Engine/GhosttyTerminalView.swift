@@ -914,6 +914,15 @@ final class GhosttyTerminalView: NSView {
     /// True when the running program has asked for mouse events.
     var mouseTrackingActive: Bool { core.wantsMouseTracking }
 
+    /// Whether Option is Meta (ESC-prefix) or an ordinary macOS modifier.
+    var optionAsMeta: Bool {
+        get { encoder?.optionAsMeta ?? false }
+        set { encoder?.optionAsMeta = newValue }
+    }
+
+    /// Tells the engine which way to answer a colour-scheme query.
+    func setDarkBackground(_ isDark: Bool) { core.isDarkBackground = isDark }
+
     /// Hands the theme's 16 ANSI colours to the engine.
     func applyPalette(_ theme: AppTheme) {
         let ansi = theme.ansi.compactMap(Self.engineColor)

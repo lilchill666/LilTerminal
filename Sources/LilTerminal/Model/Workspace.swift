@@ -60,7 +60,8 @@ final class Workspace: NSObject, ObservableObject {
         SettingsStore.shared.update { $0.preferences = prefs }
         ai.reconfigureIfNeeded()
         if old.fontName != prefs.fontName || old.fontSize != prefs.fontSize
-            || old.terminalOpacity != prefs.terminalOpacity {
+            || old.terminalOpacity != prefs.terminalOpacity
+            || old.optionAsMeta != prefs.optionAsMeta {
             refreshTheme()
         }
         if old.backgroundImagePath != prefs.backgroundImagePath {
@@ -297,7 +298,8 @@ final class Workspace: NSObject, ObservableObject {
         }
         Theme.apply(themes.active, to: session.terminalView, fontSize: fontSize,
                     fontName: prefs.fontName, opacity: prefs.terminalOpacity,
-                        inset: CGFloat(prefs.terminalPadding))
+                        inset: CGFloat(prefs.terminalPadding),
+                        optionAsMeta: prefs.optionAsMeta)
 
         session.terminalView.pasteFilter = { [weak self] text in
             guard let self else { return text }
@@ -706,7 +708,8 @@ final class Workspace: NSObject, ObservableObject {
         for session in allSessions {
             Theme.apply(theme, to: session.terminalView, fontSize: fontSize,
                         fontName: prefs.fontName, opacity: prefs.terminalOpacity,
-                        inset: CGFloat(prefs.terminalPadding))
+                        inset: CGFloat(prefs.terminalPadding),
+                        optionAsMeta: prefs.optionAsMeta)
         }
     }
 
@@ -738,7 +741,8 @@ final class Workspace: NSObject, ObservableObject {
         for session in allSessions {
             Theme.apply(themes.active, to: session.terminalView, fontSize: fontSize,
                         fontName: prefs.fontName, opacity: prefs.terminalOpacity,
-                        inset: CGFloat(prefs.terminalPadding))
+                        inset: CGFloat(prefs.terminalPadding),
+                        optionAsMeta: prefs.optionAsMeta)
         }
     }
 
