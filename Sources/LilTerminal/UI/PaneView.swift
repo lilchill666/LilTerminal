@@ -250,8 +250,17 @@ private struct TerminalPane: NSViewRepresentable {
         // single most irritating thing a split terminal can do.
         if isFocused {
             DispatchQueue.main.async {
-                if container.window?.firstResponder !== terminal {
-                    container.window?.makeFirstResponder(terminal)
+                guard let window = container.window else { return }
+                // But not out of a text field. This runs on every SwiftUI
+                // update of the pane, and a pane running something chatty —
+                // Claude, a build, anything printing — updates many times a
+                // second. Each one was snatching first responder back, so
+                // renaming a tab or typing in the sidebar's filter field was
+                // impossible while the terminal was busy: the caret went back
+                // to the shell between keystrokes.
+                if window.firstResponder is NSTextView { return }
+                if window.firstResponder !== terminal {
+                    window.makeFirstResponder(terminal)
                 }
             }
         }

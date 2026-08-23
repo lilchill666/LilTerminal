@@ -62,6 +62,8 @@ final class GhosttyTerminalView: NSView {
     /// because the prompt's appearance is not something we can reliably parse.
     private var promptMarks: [Int] = []
     private let promptMarkLimit = 400
+    /// Sub-row scroll carried between events, so nothing is discarded.
+    private var scrollRemainder: CGFloat = 0
     private var pendingReflow: DispatchWorkItem?
     private var lastTitle: String?
     private var lastDirectory: String?
@@ -513,21 +515,46 @@ final class GhosttyTerminalView: NSView {
     }
 
     override func scrollWheel(with event: NSEvent) {
+        let lines = scrollLines(for: event)
+        guard lines != 0 else { return }
+
         if forwardsMouse(event) {
             // Wheel is reported as buttons four and five, one event per line.
-            let steps = Int(abs(event.scrollingDeltaY / cellSize.height).rounded())
-            guard steps > 0 else { return }
-            let button = event.scrollingDeltaY > 0
+            let button = lines > 0
                 ? GHOSTTY_MOUSE_BUTTON_FOUR : GHOSTTY_MOUSE_BUTTON_FIVE
-            for _ in 0..<min(steps, 10) {
+            for _ in 0..<min(abs(lines), 10) {
                 sendMouse(GHOSTTY_MOUSE_ACTION_PRESS, button: button, event: event)
             }
             return
         }
-        let lines = Int((event.scrollingDeltaY / cellSize.height).rounded())
-        guard lines != 0 else { return }
         core.scrollViewport(by: -lines)
         scheduleRefresh()
+    }
+
+    /// Converts a scroll event into whole rows, carrying the remainder.
+    ///
+    /// A trackpad reports a few points per event — often less than one row.
+    /// Rounding each event on its own threw all of that away, so a short flick
+    /// scrolled nothing at all and a slow drag ignored the first part of the
+    /// gesture before suddenly jumping: the lag was the gesture being discarded
+    /// until one event happened to clear half a row by itself.
+    private func scrollLines(for event: NSEvent) -> Int {
+        // A new gesture starts from zero; leftovers from the last one would
+        // show up as a jump on the first event of this one.
+        if event.phase == .began { scrollRemainder = 0 }
+
+        // Precise deltas are in points and need converting to rows. A notched
+        // wheel already reports in rows, so dividing it by the cell height
+        // would round every notch away to nothing.
+        let rows = event.hasPreciseScrollingDeltas
+            ? event.scrollingDeltaY / cellSize.height
+            : event.scrollingDeltaY
+
+        scrollRemainder += rows
+        let whole = scrollRemainder < 0 ? scrollRemainder.rounded(.up)
+                                        : scrollRemainder.rounded(.down)
+        scrollRemainder -= whole
+        return Int(whole)
     }
 
     // MARK: - Prompt marks
