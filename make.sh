@@ -61,14 +61,47 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSMinimumSystemVersion</key>    <string>14.0</string>
     <key>NSHighResolutionCapable</key>   <true/>
     <key>NSSupportsAutomaticTermination</key><false/>
+    <!-- A terminal runs whatever you ask it to, so the permission prompts a
+         command triggers are attributed to this app. Without a usage string
+         macOS kills the process instead of asking. -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>A command you ran in the terminal is asking to use the microphone.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>A command you ran in the terminal is asking to use the camera.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>A command you ran in the terminal is asking to read your Desktop folder.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>A command you ran in the terminal is asking to read your Documents folder.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>A command you ran in the terminal is asking to read your Downloads folder.</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>A command you ran in the terminal is asking to read a removable volume.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>A command you ran in the terminal is asking to control another app.</string>
 </dict>
 </plist>
 PLIST
 
-# Ad-hoc signing is enough for local use. The app is intentionally NOT
-# sandboxed: reading other processes' CPU/memory via libproc is impossible
-# inside the sandbox.
-codesign --force --deep --sign - "$APP" 2>/dev/null || echo "note: ad-hoc signing skipped"
+# The app is intentionally NOT sandboxed: reading other processes' CPU and
+# memory via libproc is impossible inside the sandbox.
+#
+# Signing identity matters more than it looks. Ad-hoc signing gives the bundle a
+# designated requirement of `cdhash H"..."` — the exact bytes of this build and
+# nothing else. Every permission macOS remembers (Screen Recording, Microphone,
+# Accessibility, Full Disk Access) is keyed to that requirement, so every
+# rebuild looks like a different application: the switch stays on in System
+# Settings while the new binary is quietly denied. Signing with a certificate
+# instead pins the requirement to the certificate, and the grants survive.
+#
+# Set LILTERM_SIGN_ID to a name from `security find-identity -v -p codesigning`,
+# or leave it unset for ad-hoc.
+if [[ -n "${LILTERM_SIGN_ID:-}" ]]; then
+    codesign --force --deep --options runtime --sign "$LILTERM_SIGN_ID" "$APP" \
+        && echo "Signed with $LILTERM_SIGN_ID (permissions will persist across rebuilds)" \
+        || { echo "error: signing with '$LILTERM_SIGN_ID' failed"; exit 1; }
+else
+    codesign --force --deep --sign - "$APP" 2>/dev/null || echo "note: ad-hoc signing skipped"
+fi
 echo "Built $APP"
 
 # --- install ----------------------------------------------------------------
@@ -84,6 +117,22 @@ if [[ "$MODE" == "--install" ]]; then
     fi
     rm -rf "$DEST"
     cp -R "$APP" "$DEST"
+
+    # An ad-hoc build has a new identity every time, so every permission macOS
+    # remembered now points at a binary that no longer exists — the switch
+    # still reads as on while the new build is denied, which looks exactly like
+    # the permission being broken. Clearing them loses nothing that still
+    # worked, and makes macOS ask again rather than deny silently.
+    if [[ -z "${LILTERM_SIGN_ID:-}" ]]; then
+        for service in ScreenCapture Microphone Camera Accessibility ListenEvent \
+                       SystemPolicyDesktopFolder SystemPolicyDocumentsFolder \
+                       SystemPolicyDownloadsFolder AppleEvents; do
+            tccutil reset "$service" app.lilterminal >/dev/null 2>&1 || true
+        done
+        echo "note: ad-hoc signed — macOS sees each build as a new app, so stale"
+        echo "      permission grants were cleared and will be asked for again."
+        echo "      Export LILTERM_SIGN_ID=<identity> to keep them across builds."
+    fi
     # Nudge Launch Services so the new icon and version are picked up.
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
         -f "$DEST" 2>/dev/null || true

@@ -321,6 +321,29 @@ designed to outlive the app.
 
 ### Three bugs this shook out
 
+**A pty is not a controlling terminal until something claims it.**
+`POSIX_SPAWN_SETSID` makes the child a session leader, which reads like enough
+and is not: the tty still has to be claimed with `TIOCSCTTY`, and there is no
+spawn file action for an ioctl. Duplicating the already-open slave descriptor
+never claims it, and neither does opening it by name — that works on Linux, not
+on BSD. So the shell ran on a pty it could not open as `/dev/tty`, and
+everything that insists on a real terminal failed: `sudo` could not prompt for a
+password, and nor could `ssh` or a GPG pinentry. `ps` was no help, reporting
+`??` for perfectly healthy shells too. The tell is `(exec < /dev/tty)` failing.
+Fixed by forking and calling `login_tty` in the child — setsid, TIOCSCTTY and
+the descriptors in one call — which is why `Sources/CSpawn` exists at all: Swift
+marks `fork` unavailable.
+
+**Ad-hoc signing silently voids every permission on each rebuild.** The
+designated requirement of an ad-hoc bundle is `cdhash H"..."` and nothing else —
+the exact bytes of that build. TCC keys Screen Recording, Microphone and the
+rest to that requirement, so a rebuilt app is a different application to macOS:
+the switch stays on in System Settings while the new binary is denied, which
+looks precisely like the permission being broken. Set `LILTERM_SIGN_ID` to sign
+with a certificate and the requirement pins to the certificate instead, so
+grants survive. Failing that, `--install` now clears the dead grants so macOS
+asks again rather than denying in silence.
+
 **Option was a modifier half the time and Meta the other half.** Whether the
 ALT bit reached the encoder depended on whether Control happened to be held too,
 because the branch that decides what text to send also decided that. So ⌥G typed

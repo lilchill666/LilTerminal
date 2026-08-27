@@ -9,9 +9,13 @@ let package = Package(
         // Vendor/ghostty-vt/REVISION and Tools/build-ghostty-vt.sh.
         .systemLibrary(name: "CGhosttyVT", path: "Sources/CGhosttyVT"),
 
+        // fork + login_tty, which Swift cannot express: `fork` is unavailable
+        // and claiming a controlling terminal needs an ioctl in the child.
+        .target(name: "CSpawn", path: "Sources/CSpawn"),
+
         // Shared by the app and the session daemon: the daemon owns the ptys,
         // so the pty code cannot live inside the app target.
-        .target(name: "TerminalCore", path: "Sources/TerminalCore",
+        .target(name: "TerminalCore", dependencies: ["CSpawn"], path: "Sources/TerminalCore",
                 swiftSettings: [.swiftLanguageMode(.v5)]),
 
         // Outlives the app so shells survive a quit or a crash.

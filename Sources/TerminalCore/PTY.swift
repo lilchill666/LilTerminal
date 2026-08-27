@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import CSpawn
 
 /// A pseudo-terminal running a child process.
 ///
@@ -35,41 +36,30 @@ public final class PTY {
             throw Failure.openFailed(errno)
         }
 
-        var actions: posix_spawn_file_actions_t?
-        posix_spawn_file_actions_init(&actions)
-        defer { posix_spawn_file_actions_destroy(&actions) }
-        // The child gets the slave side as its stdin/stdout/stderr.
-        posix_spawn_file_actions_adddup2(&actions, slave, 0)
-        posix_spawn_file_actions_adddup2(&actions, slave, 1)
-        posix_spawn_file_actions_adddup2(&actions, slave, 2)
-        posix_spawn_file_actions_addclose(&actions, slave)
-        posix_spawn_file_actions_addclose(&actions, master)
-        if let directory {
-            posix_spawn_file_actions_addchdir_np(&actions, directory)
-        }
-
-        var attrs: posix_spawnattr_t?
-        posix_spawnattr_init(&attrs)
-        defer { posix_spawnattr_destroy(&attrs) }
-        // SETSID makes the child a session leader so the pty becomes its
-        // controlling terminal — without it job control and signals break.
-        posix_spawnattr_setflags(&attrs, Int16(POSIX_SPAWN_SETSID))
-
-        // argv[0] may differ from the path: a leading dash is how a shell is
-        // told it is a login shell.
+        // Resolved before the descriptor is closed: the child reopens the
+        // slave by name, which is the part that matters below.
+        // The controlling terminal is claimed inside the child by CSpawn; see
+        // its header for why posix_spawn cannot do this. Argument and
+        // environment arrays are built here, before the fork, because nothing
+        // that allocates may run between fork and exec.
         let argv0 = execName ?? (executable as NSString).lastPathComponent
-        var childPID: pid_t = 0
         let cArgs: [String] = [argv0] + args
-        let status = withCStrings(cArgs) { argvPtrs in
+
+        let childPID: pid_t = withCStrings(cArgs) { argvPtrs in
             withCStrings(environment) { envPtrs in
-                posix_spawn(&childPID, executable, &actions, &attrs, argvPtrs, envPtrs)
+                if let directory {
+                    return directory.withCString { dir in
+                        lilterm_spawn_session(executable, argvPtrs, envPtrs, master, slave, dir)
+                    }
+                }
+                return lilterm_spawn_session(executable, argvPtrs, envPtrs, master, slave, nil)
             }
         }
 
         close(slave)
-        guard status == 0 else {
+        guard childPID > 0 else {
             close(master)
-            throw Failure.spawnFailed(status)
+            throw Failure.spawnFailed(errno)
         }
 
         masterFD = master
