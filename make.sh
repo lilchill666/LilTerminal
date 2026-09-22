@@ -93,13 +93,23 @@ PLIST
 # Settings while the new binary is quietly denied. Signing with a certificate
 # instead pins the requirement to the certificate, and the grants survive.
 #
-# Set LILTERM_SIGN_ID to a name from `security find-identity -v -p codesigning`,
-# or leave it unset for ad-hoc.
-if [[ -n "${LILTERM_SIGN_ID:-}" ]]; then
-    codesign --force --deep --options runtime --sign "$LILTERM_SIGN_ID" "$APP" \
-        && echo "Signed with $LILTERM_SIGN_ID (permissions will persist across rebuilds)" \
-        || { echo "error: signing with '$LILTERM_SIGN_ID' failed"; exit 1; }
+# LILTERM_SIGN_ID overrides; otherwise the local identity created by
+# Tools/make-signing-identity.sh is used when present. It does not have to be
+# trusted — signing works regardless, and what matters here is only that the
+# requirement names a certificate instead of a hash.
+SIGN_ID="${LILTERM_SIGN_ID:-}"
+if [[ -z "$SIGN_ID" ]]; then
+    SIGN_ID=$(security find-identity -p codesigning 2>/dev/null \
+        | awk -F'"' '/LilTerminal Local Signing/ {print $2; exit}')
+fi
+
+if [[ -n "$SIGN_ID" ]]; then
+    codesign --force --deep --sign "$SIGN_ID" "$APP" 2>/dev/null \
+        && SIGNED=1 \
+        || { echo "error: signing with '$SIGN_ID' failed"; exit 1; }
+    echo "Signed as \"$SIGN_ID\" — permissions persist across updates"
 else
+    SIGNED=0
     codesign --force --deep --sign - "$APP" 2>/dev/null || echo "note: ad-hoc signing skipped"
 fi
 echo "Built $APP"
@@ -123,7 +133,7 @@ if [[ "$MODE" == "--install" ]]; then
     # still reads as on while the new build is denied, which looks exactly like
     # the permission being broken. Clearing them loses nothing that still
     # worked, and makes macOS ask again rather than deny silently.
-    if [[ -z "${LILTERM_SIGN_ID:-}" ]]; then
+    if [[ "${SIGNED:-0}" != "1" ]]; then
         for service in ScreenCapture Microphone Camera Accessibility ListenEvent \
                        SystemPolicyDesktopFolder SystemPolicyDocumentsFolder \
                        SystemPolicyDownloadsFolder AppleEvents; do
@@ -131,7 +141,7 @@ if [[ "$MODE" == "--install" ]]; then
         done
         echo "note: ad-hoc signed — macOS sees each build as a new app, so stale"
         echo "      permission grants were cleared and will be asked for again."
-        echo "      Export LILTERM_SIGN_ID=<identity> to keep them across builds."
+        echo "      Run Tools/make-signing-identity.sh once to stop this happening."
     fi
     # Nudge Launch Services so the new icon and version are picked up.
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \

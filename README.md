@@ -334,15 +334,31 @@ Fixed by forking and calling `login_tty` in the child — setsid, TIOCSCTTY and
 the descriptors in one call — which is why `Sources/CSpawn` exists at all: Swift
 marks `fork` unavailable.
 
+**A terminal must not hand its own environment to the shell.** The old code
+passed `ProcessInfo.processInfo.environment` through verbatim, with a comment
+claiming this matched Terminal.app. It is the opposite of what Terminal.app
+does, which is to start a login shell in a clean session. Launch LilTerminal
+from a program that exports its own state and every tab inherits it: run it from
+a Claude Code session and each shell — and everything started in it — believes
+it is a child of that session, `CLAUDE_CODE_CHILD_SESSION` and all, which among
+other things silently turns off transcript saving. Only what identifies the user
+and the terminal is passed now; the login shell builds the rest, because that is
+its job — `/etc/zprofile` runs `path_helper` before the user's own profile.
+Measured: with the marker set in the parent, a spawned shell now sees zero
+`CLAUDE_*` variables and still resolves a full PATH.
+
 **Ad-hoc signing silently voids every permission on each rebuild.** The
 designated requirement of an ad-hoc bundle is `cdhash H"..."` and nothing else —
 the exact bytes of that build. TCC keys Screen Recording, Microphone and the
 rest to that requirement, so a rebuilt app is a different application to macOS:
 the switch stays on in System Settings while the new binary is denied, which
-looks precisely like the permission being broken. Set `LILTERM_SIGN_ID` to sign
-with a certificate and the requirement pins to the certificate instead, so
-grants survive. Failing that, `--install` now clears the dead grants so macOS
-asks again rather than denying in silence.
+looks precisely like the permission being broken. `Tools/make-signing-identity.sh` creates a local
+self-signed certificate and `make.sh` picks it up automatically, which changes
+the requirement to `identifier "app.lilterminal" and certificate leaf = H"..."`
+— stable across rebuilds, so grants survive an update. The certificate is not
+trusted for anything and does not need to be; signing works without it. Failing
+that, `--install` clears the dead grants so macOS asks again rather than denying
+in silence.
 
 **AppKit reports arrows as characters, and they must never be sent as text.**
 An up arrow arrives from `NSEvent` as U+F700, in the private use area, along

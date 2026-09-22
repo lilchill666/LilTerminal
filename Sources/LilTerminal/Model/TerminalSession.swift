@@ -69,13 +69,7 @@ final class TerminalSession: ObservableObject, Identifiable {
     }
 
     func start(in directory: String?) {
-        // The user's real environment plus TERM, so capability probes and
-        // anything reading PATH behave as they do in Terminal.app.
-        var environment = ProcessInfo.processInfo.environment
-        environment["TERM"] = "xterm-256color"
-        environment["TERM_PROGRAM"] = "LilTerminal"
-        environment["COLORTERM"] = "truecolor"
-        let entries = environment.map { "\($0.key)=\($0.value)" }
+        let entries = Self.shellEnvironment(for: shell).map { "\($0.key)=\($0.value)" }
 
         do {
             try terminalView.start(
@@ -113,6 +107,45 @@ final class TerminalSession: ObservableObject, Identifiable {
                 self.git = info
             }
         }
+    }
+
+    /// The environment a shell is started with.
+    ///
+    /// Deliberately *not* this process's environment. A terminal launched from
+    /// another program inherits that program's variables, and passing them on
+    /// hands every tab a private environment that has nothing to do with the
+    /// user: launch LilTerminal from a tool that exports its own state and each
+    /// shell — and everything run in it — believes it is running inside that
+    /// tool. That is not what Terminal.app does, whatever the old comment here
+    /// claimed; it starts a login shell in a clean session.
+    ///
+    /// So only what identifies the user and the terminal is passed through. The
+    /// login shell builds the rest, which is its job: `/etc/zprofile` runs
+    /// `path_helper`, and the user's own profile runs after it.
+    static func shellEnvironment(for shell: Shell) -> [String: String] {
+        let inherited = ProcessInfo.processInfo.environment
+        var environment: [String: String] = [
+            "HOME": NSHomeDirectory(),
+            "USER": NSUserName(),
+            "LOGNAME": NSUserName(),
+            "SHELL": shell.path,
+            // A starting point only; path_helper rebuilds this from
+            // /etc/paths and /etc/paths.d before the user's profile runs.
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+            "TERM": "xterm-256color",
+            "TERM_PROGRAM": "LilTerminal",
+            "TERM_PROGRAM_VERSION": Bundle.main
+                .object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0",
+            "COLORTERM": "truecolor",
+        ]
+
+        // Carried over when present: these describe the user's session rather
+        // than whatever happened to launch the app.
+        for key in ["LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "SSH_AUTH_SOCK",
+                    "__CF_USER_TEXT_ENCODING"] {
+            if let value = inherited[key] { environment[key] = value }
+        }
+        return environment
     }
 
     @discardableResult
