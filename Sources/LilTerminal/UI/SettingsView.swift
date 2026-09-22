@@ -364,7 +364,7 @@ struct SettingsView: View {
         SwiftUI.Section {
             Toggle("Reopen tabs on launch", isOn: prefs.restoreSessions)
             Toggle("Keep shells running after quit", isOn: prefs.persistentSessions)
-            Toggle("Auto-file idle background jobs", isOn: $workspace.autoFileBackgroundJobs)
+            Toggle("Auto-file idle background jobs", isOn: prefs.autoFileBackgroundJobs)
         } header: {
             Text("Behaviour")
         } footer: {

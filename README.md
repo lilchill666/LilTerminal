@@ -344,6 +344,17 @@ with a certificate and the requirement pins to the certificate instead, so
 grants survive. Failing that, `--install` now clears the dead grants so macOS
 asks again rather than denying in silence.
 
+**AppKit reports arrows as characters, and they must never be sent as text.**
+An up arrow arrives from `NSEvent` as U+F700, in the private use area, along
+with the F-keys, Home, End, Page Up/Down and forward delete. Passing that
+through as typed text is wrong in every mode and catastrophic in one: with the
+Kitty keyboard protocol on, the encoder prefers the text it was handed, so the
+program received a literal U+F700 instead of a key event. In anything that
+enables the protocol — Claude's own prompts among them — the arrow keys did
+nothing at all. Ordinary modes hid it, because there the encoder ignores the
+text and uses the key. Text is now only sent for scalars outside
+U+F700–U+F8FF.
+
 **Option was a modifier half the time and Meta the other half.** Whether the
 ALT bit reached the encoder depended on whether Control happened to be held too,
 because the branch that decides what text to send also decided that. So ⌥G typed

@@ -40,6 +40,11 @@ struct Preferences: Codable, Equatable {
     /// Option as Meta sends ESC+key, which is what readline word-motion
     /// (⌥B, ⌥F) expects. Off by default, matching macOS: Option composes
     /// characters, so ⌥G types "©".
+    /// Filing idle jobs into a group on your behalf moves tabs you did not ask
+    /// to move, so it stays off until asked for. Lives here rather than on the
+    /// workspace so the answer survives a relaunch.
+    var autoFileBackgroundJobs = false
+
     var optionAsMeta = false
 
     var typingSounds = false

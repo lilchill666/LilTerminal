@@ -22,7 +22,6 @@ final class Workspace: NSObject, ObservableObject {
     @Published var selectedTabID: UUID?
     @Published var snippets: [Snippet] = []
     @Published var availableShells: [Shell] = []
-    @Published var autoFileBackgroundJobs = true
     @Published var sidebarVisible = true
     @Published var inspectorVisible = false
     /// Sidebar filter text.
@@ -228,7 +227,7 @@ final class Workspace: NSObject, ObservableObject {
         }
         WindowConfigurator.enforceTrafficLights()
         ai.tick()
-        if autoFileBackgroundJobs { autoFileIfNeeded() }
+        if prefs.autoFileBackgroundJobs { autoFileIfNeeded() }
     }
 
     /// Moves long-idle busy tabs into the Background group — the actual fix for

@@ -301,7 +301,7 @@ struct AppCommands: Commands {
 
             Divider()
 
-            Toggle("Auto-file Background Jobs", isOn: $workspace.autoFileBackgroundJobs)
+            Toggle("Auto-file Background Jobs", isOn: $workspace.prefs.autoFileBackgroundJobs)
         }
 
         CommandMenu("Snippets") {

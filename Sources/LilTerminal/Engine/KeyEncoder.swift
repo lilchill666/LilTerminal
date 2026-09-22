@@ -64,14 +64,12 @@ final class KeyEncoder {
         // Control combinations carry no useful characters, so they are left to
         // the encoder to derive from the key itself.
         // With Option as Meta the composed character is not what was meant:
-        // ⌥B is "back one word", not "∫". Leaving the text out lets the encoder
-        // derive ESC+key from the key itself.
         // With Option as Meta the composed character is not what was meant: ⌥B
         // is "back one word", not "∫". The unmodified key is what gets escaped.
         let optionIsMeta = optionAsMeta && nsEvent.modifierFlags.contains(.option)
         let source = optionIsMeta ? nsEvent.charactersIgnoringModifiers : nsEvent.characters
         let wantsText = !nsEvent.modifierFlags.contains(.control)
-            && (source?.unicodeScalars.allSatisfy { $0.value >= 0x20 } ?? false)
+            && (source?.unicodeScalars.allSatisfy(Self.isTypedText) ?? false)
         let utf8 = wantsText ? Array((source ?? "").utf8).map { CChar(bitPattern: $0) } : []
 
         var buffer = [CChar](repeating: 0, count: 128)
@@ -107,6 +105,19 @@ final class KeyEncoder {
         // the input line.
         guard optionIsMeta, bytes.first != 0x1b else { return bytes }
         return [0x1b] + bytes
+    }
+
+    /// Whether a scalar is something the user actually typed.
+    ///
+    /// AppKit reports arrows, F-keys, Home/End/Page and friends as characters
+    /// in the private use area — an up arrow arrives as U+F700. Handing those
+    /// to the encoder as text is wrong in every mode, and catastrophic in one:
+    /// with the Kitty keyboard protocol on, the encoder prefers the text it was
+    /// given, so arrows went to the program as a literal U+F700 instead of a
+    /// key. In anything that enables that protocol — Claude's own prompts among
+    /// them — the arrow keys simply did nothing.
+    private static func isTypedText(_ scalar: Unicode.Scalar) -> Bool {
+        scalar.value >= 0x20 && !(0xF700...0xF8FF).contains(scalar.value)
     }
 
     private static func mods(for flags: NSEvent.ModifierFlags) -> GhosttyMods {
