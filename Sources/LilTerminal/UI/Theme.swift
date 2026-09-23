@@ -23,7 +23,8 @@ enum Theme {
 
     static func apply(_ theme: AppTheme, to view: GhosttyTerminalView, fontSize: CGFloat,
                       fontName: String = "SF Mono", opacity: Double = 1.0,
-                      inset: CGFloat = 12, optionAsMeta: Bool = false) {
+                      inset: CGFloat = 12, optionAsMeta: Bool = false,
+                      scrollbackLines: Int = 0) {
         view.backgroundColor = HexColor.nsColor(theme.background, fallback: .black)
         view.foregroundColor = HexColor.nsColor(theme.foreground, fallback: .white)
         view.cursorColor = HexColor.nsColor(theme.cursor, fallback: .white)
@@ -36,6 +37,7 @@ enum Theme {
         view.applyPalette(theme)
         view.setDarkBackground(theme.isDark)
         view.optionAsMeta = optionAsMeta
+        view.setScrollback(lines: scrollbackLines)
         view.padding = inset
         view.font = monoFont(size: fontSize, name: fontName)
         view.needsDisplay = true

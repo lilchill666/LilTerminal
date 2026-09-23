@@ -195,6 +195,40 @@ final class GhosttyCore {
     /// Whether the active theme's background is dark, for CSI ? 996 n.
     var isDarkBackground = true
 
+    /// Sets how much history the terminal keeps.
+    ///
+    /// - Parameter lines: rows to retain, or nil for no limit.
+    ///
+    /// Both limits are cleared first. They work together — whichever is reached
+    /// first prunes — so leaving the engine's default byte cap in place while
+    /// setting a generous line count would let bytes quietly win, and history
+    /// would still disappear well before the line count was reached.
+    func setScrollback(lines: Int?) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let terminal else { return }
+
+        // NULL removes a limit; see GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_*.
+        _ = ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, nil)
+        if let lines {
+            var value = size_t(lines)
+            _ = ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_LINES, &value)
+        } else {
+            _ = ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_LINES, nil)
+        }
+    }
+
+    /// What the engine currently reports as its limits, for diagnostics.
+    var scrollbackLimits: (bytes: Int, lines: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let terminal else { return (0, 0) }
+        var bytes = size_t(0), lines = size_t(0)
+        _ = ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_SCROLLBACK_MAX_BYTES, &bytes)
+        _ = ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_SCROLLBACK_MAX_LINES, &lines)
+        return (Int(bytes), Int(lines))
+    }
+
     /// Installs a theme's colours in the engine.
     ///
     /// Without this the ANSI palette in every theme was decoration: the engine

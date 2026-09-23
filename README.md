@@ -334,6 +334,14 @@ Fixed by forking and calling `login_tty` in the child — setsid, TIOCSCTTY and
 the descriptors in one call — which is why `Sources/CSpawn` exists at all: Swift
 marks `fork` unavailable.
 
+**The engine's default scrollback is a byte cap, and a small one.** No line
+limit is set out of the box, which reads like "unlimited" and is not: writing
+60,000 lines of ordinary output left 721 rows behind. Both limits work together
+and whichever is reached first prunes, so raising the line count alone would
+still lose history to the byte cap — clearing bytes is part of the fix, not an
+extra. `scrollbackLines` defaults to unlimited; the same 60,000 lines then
+retain 60,721 rows.
+
 **A terminal must not hand its own environment to the shell.** The old code
 passed `ProcessInfo.processInfo.environment` through verbatim, with a comment
 claiming this matched Terminal.app. It is the opposite of what Terminal.app

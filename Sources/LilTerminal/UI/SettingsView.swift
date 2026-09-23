@@ -317,6 +317,23 @@ struct SettingsView: View {
 
     @ViewBuilder private var terminalSection: some View {
         SwiftUI.Section {
+            Picker("Scrollback", selection: prefs.scrollbackLines) {
+                Text("Unlimited").tag(0)
+                Text("100,000 lines").tag(100_000)
+                Text("10,000 lines").tag(10_000)
+                Text("1,000 lines").tag(1_000)
+            }
+        } header: {
+            Text("History")
+        } footer: {
+            Text(current.scrollbackLines == 0
+                 ? "Nothing is discarded, so a long session keeps every line — and holds the memory for it. Pick a limit if that matters more than the history."
+                 : "Older lines are discarded once a terminal passes \(current.scrollbackLines.formatted()) lines.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        SwiftUI.Section {
             Toggle("Use Option as Meta", isOn: prefs.optionAsMeta)
         } header: {
             Text("Keyboard")

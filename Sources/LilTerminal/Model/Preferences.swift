@@ -45,6 +45,15 @@ struct Preferences: Codable, Equatable {
     /// workspace so the answer survives a relaunch.
     var autoFileBackgroundJobs = false
 
+    /// Rows of history each terminal keeps. Zero means no limit.
+    ///
+    /// Unlimited by default. The engine ships with a byte cap instead of a line
+    /// cap, and it is small: 60,000 lines of ordinary output left 721 rows
+    /// behind. Losing a long conversation to an invisible cap is worse than
+    /// spending the memory, and anyone who wants the memory back can pick a
+    /// number here.
+    var scrollbackLines = 0
+
     var optionAsMeta = false
 
     var typingSounds = false

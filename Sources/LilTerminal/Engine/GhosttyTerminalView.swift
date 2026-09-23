@@ -920,6 +920,11 @@ final class GhosttyTerminalView: NSView {
         set { encoder?.optionAsMeta = newValue }
     }
 
+    /// Rows of history to keep; zero means no limit.
+    func setScrollback(lines: Int) {
+        core.setScrollback(lines: lines <= 0 ? nil : lines)
+    }
+
     /// Tells the engine which way to answer a colour-scheme query.
     func setDarkBackground(_ isDark: Bool) { core.isDarkBackground = isDark }
 

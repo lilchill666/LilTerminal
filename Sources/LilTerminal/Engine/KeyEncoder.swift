@@ -9,6 +9,8 @@ import CGhosttyVT
 /// encoder is synced from the terminal so those modes are honoured for free.
 final class KeyEncoder {
     private var encoder: GhosttyKeyEncoder?
+    /// Exposed for the encoding probe in Tools; not used by the app.
+    var rawEncoder: GhosttyKeyEncoder? { encoder }
     private var event: GhosttyKeyEvent?
 
     /// Whether Option is Meta (ESC-prefixes the key) or an ordinary macOS

@@ -60,7 +60,8 @@ final class Workspace: NSObject, ObservableObject {
         ai.reconfigureIfNeeded()
         if old.fontName != prefs.fontName || old.fontSize != prefs.fontSize
             || old.terminalOpacity != prefs.terminalOpacity
-            || old.optionAsMeta != prefs.optionAsMeta {
+            || old.optionAsMeta != prefs.optionAsMeta
+            || old.scrollbackLines != prefs.scrollbackLines {
             refreshTheme()
         }
         if old.backgroundImagePath != prefs.backgroundImagePath {
@@ -298,7 +299,8 @@ final class Workspace: NSObject, ObservableObject {
         Theme.apply(themes.active, to: session.terminalView, fontSize: fontSize,
                     fontName: prefs.fontName, opacity: prefs.terminalOpacity,
                         inset: CGFloat(prefs.terminalPadding),
-                        optionAsMeta: prefs.optionAsMeta)
+                        optionAsMeta: prefs.optionAsMeta,
+                        scrollbackLines: prefs.scrollbackLines)
 
         session.terminalView.pasteFilter = { [weak self] text in
             guard let self else { return text }
@@ -708,7 +710,8 @@ final class Workspace: NSObject, ObservableObject {
             Theme.apply(theme, to: session.terminalView, fontSize: fontSize,
                         fontName: prefs.fontName, opacity: prefs.terminalOpacity,
                         inset: CGFloat(prefs.terminalPadding),
-                        optionAsMeta: prefs.optionAsMeta)
+                        optionAsMeta: prefs.optionAsMeta,
+                        scrollbackLines: prefs.scrollbackLines)
         }
     }
 
@@ -741,7 +744,8 @@ final class Workspace: NSObject, ObservableObject {
             Theme.apply(themes.active, to: session.terminalView, fontSize: fontSize,
                         fontName: prefs.fontName, opacity: prefs.terminalOpacity,
                         inset: CGFloat(prefs.terminalPadding),
-                        optionAsMeta: prefs.optionAsMeta)
+                        optionAsMeta: prefs.optionAsMeta,
+                        scrollbackLines: prefs.scrollbackLines)
         }
     }
 
