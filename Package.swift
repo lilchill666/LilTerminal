@@ -23,6 +23,11 @@ let package = Package(
                           dependencies: ["TerminalCore"],
                           path: "Sources/lilterm-sessiond",
                           swiftSettings: [.swiftLanguageMode(.v5)]),
+        // `lilterm ls` / `lilterm attach <tab>`: reach live tabs from SSH (e.g. a phone).
+        .executableTarget(name: "lilterm",
+                          dependencies: ["TerminalCore"],
+                          path: "Sources/lilterm",
+                          swiftSettings: [.swiftLanguageMode(.v5)]),
         .executableTarget(
             name: "LilTerminal",
             dependencies: ["CGhosttyVT", "TerminalCore"],

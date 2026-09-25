@@ -194,7 +194,26 @@ final class Workspace: NSObject, ObservableObject {
         tabs.first { $0.sessions.contains { $0.id == sessionID } }
     }
 
+    /// Last name sent to the daemon per session, so `.label` goes out only on a change.
+    private var sentLabels: [String: String] = [:]
+
+    /// Keeps the daemon's copy of each tab's name current — `lilterm ls` / `attach <name>`
+    /// over SSH find tabs by what you see in the sidebar. Rides the sampler tick.
+    private func syncDaemonLabels() {
+        guard prefs.persistentSessions, DaemonClient.shared.isConnected else { return }
+        for tab in tabs {
+            for (index, session) in tab.sessions.enumerated() {
+                let name = tab.displayTitle + (tab.sessions.count > 1 ? " · \(index + 1)" : "")
+                let id = session.persistentID
+                guard sentLabels[id] != name else { continue }
+                sentLabels[id] = name
+                DaemonClient.shared.label(id: id, title: name)
+            }
+        }
+    }
+
     private func applyMetrics(_ samples: [pid_t: SessionMetrics]) {
+        syncDaemonLabels()
         for session in allSessions {
             guard session.isRunning, let metrics = samples[session.shellPid] else { continue }
             if session.metrics != metrics { session.metrics = metrics }

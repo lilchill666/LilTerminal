@@ -281,6 +281,11 @@ final class DaemonClient {
         transports[id] = nil
     }
 
+    /// Tell the daemon the tab's name, for `lilterm` over SSH.
+    func label(id: String, title: String) {
+        send(.label(id: id, title: title))
+    }
+
     func hasSession(id: String) -> Bool {
         knownSessions.contains { $0.id == id && $0.isRunning }
     }

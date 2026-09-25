@@ -47,12 +47,16 @@ public struct SessionSummary: Codable, Sendable {
     public var pid: Int32
     public var isRunning: Bool
     public var startedAt: Date
+    /// The tab's name as the app shows it (sent with `.label`). Nil until the app names it —
+    /// and optional so an older app/daemon pair still decodes.
+    public var title: String?
 
-    public init(id: String, pid: Int32, isRunning: Bool, startedAt: Date) {
+    public init(id: String, pid: Int32, isRunning: Bool, startedAt: Date, title: String? = nil) {
         self.id = id
         self.pid = pid
         self.isRunning = isRunning
         self.startedAt = startedAt
+        self.title = title
     }
 }
 
@@ -67,6 +71,8 @@ public enum ClientMessage: Codable, Sendable {
     case resize(id: String, columns: UInt16, rows: UInt16)
     case kill(id: String)
     case shutdownIfIdle
+    /// The tab's current name, so `lilterm ls` / `lilterm attach <name>` can find it from SSH.
+    case label(id: String, title: String)
 }
 
 /// Daemon to app.

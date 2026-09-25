@@ -21,6 +21,8 @@ final class SessionDaemon {
         var scrollback = Data()
         var exitCode: Int32?
         var isRunning = true
+        /// The app's name for the tab (`.label`), shown by `lilterm ls`.
+        var title: String?
     }
 
     private var sessions: [String: Session] = [:]
@@ -130,7 +132,8 @@ final class SessionDaemon {
         case .list:
             send(.sessions(sessions.map { id, session in
                 SessionSummary(id: id, pid: session.pty.pid,
-                               isRunning: session.isRunning, startedAt: session.startedAt)
+                               isRunning: session.isRunning, startedAt: session.startedAt,
+                               title: session.title)
             }), to: client)
 
         case .create(let spec):
@@ -166,6 +169,9 @@ final class SessionDaemon {
 
         case .shutdownIfIdle:
             shutdownIfIdle()
+
+        case .label(let id, let title):
+            sessions[id]?.title = title
         }
     }
 
